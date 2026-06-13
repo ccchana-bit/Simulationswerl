@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Wind Turbine CFD — 10W Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --cyan:   #00e5ff;
+            --green:  #00ff9d;
+            --amber:  #ffb300;
+            --red:    #ff3d3d;
+            --purple: #c77dff;
+            --bg:     #04060f;
+            --panel:  rgba(8, 14, 32, 0.92);
+            --border: rgba(0, 229, 255, 0.18);
+        }
+
+        body {
+            overflow: hidden;
+            background: var(--bg);
+            font-family: 'Share Tech Mono', monospace;
+            color: #fff;
+        }
+
+        canvas { display: block; }
+
+        /* ══ TOP HEADER BAR ══════════════════════════════════════════════ */
+        #header {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 44px;
+            background: linear-gradient(90deg, rgba(0,229,255,0.08) 0%, rgba(8,14,32,0.97) 40%, rgba(8,14,32,0.97) 60%, rgba(0,255,157,0.08) 100%);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 20px;
+            z-index: 10;
+            backdrop-filter: blur(10px);
+        }
+        #header .logo {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 900;
+            font-size: 13px;
+            letter-spacing: 3px;
+            color: var(--cyan);
+            text-shadow: 0 0 18px rgba(0,229,255,0.6);
+        }
+        #header .subtitle {
+            font-size: 11px;
+            color: rgba(255,255,255,0.35);
+            letter-spacing: 2px;
+        }
+        #header .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 10px var(--green);
+            animation: pulse-dot 1.8s ease-in-out infinite;
+        }
+        #header .status-text {
+            font-size: 10px; color: var(--green); margin-left: 8px;
+            letter-spacing: 1.5px;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; box-shadow: 0 0 10px var(--green); }
+            50% { opacity: 0.4; box-shadow: 0 0 4px var(--green); }
+        }
+
+        /* ══ LEFT PANEL — CFD PARAMS ════════════════════════════════════ */
+        #left-panel {
+            position: absolute;
+            top: 58px; left: 14px;
+            width: 218px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 16px;
+            backdrop-filter: blur(12px);
+            z-index: 10;
+        }
+        .panel-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 9.5px;
+            letter-spacing: 2.5px;
+            color: var(--cyan);
+            margin-bottom: 12px;
+            opacity: 0.85;
+        }
+        .param-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 11px;
+        }
+        .param-row:last-child { border-bottom: none; }
+        .param-label { color: rgba(255,255,255,0.45); }
+        .param-val { color: var(--cyan); font-weight: 600; }
+
+        .legend-wrap { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); }
+        .legend-label { font-size: 9.5px; color: rgba(255,255,255,0.35); margin-bottom: 5px; }
+        .legend-bar {
+            height: 8px; border-radius: 4px;
+            background: linear-gradient(to right, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000);
+        }
+        .legend-ticks {
+            display: flex; justify-content: space-between;
+            font-size: 9px; color: rgba(255,255,255,0.3); margin-top: 3px;
+        }
+
+        /* ══ RIGHT PANEL — GENERATOR ELECTRICAL OUTPUT ══════════════════ */
+        #right-panel {
+            position: absolute;
+            top: 58px; right: 14px;
+            width: 248px;
+            background: var(--panel);
+            border: 1px solid rgba(0,255,157,0.2);
+            border-radius: 12px;
+            padding: 14px 16px;
+            backdrop-filter: blur(12px);
+            z-index: 10;
+        }
+
+        /* Big metric cards */
+        .metric-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .metric-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 8px;
+            padding: 10px 10px 8px;
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.3s;
+        }
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            border-radius: 8px 8px 0 0;
+        }
+        .metric-card.watt::before  { background: linear-gradient(90deg, var(--amber), #ff6d00); }
+        .metric-card.volt::before  { background: linear-gradient(90deg, var(--cyan), #0090ff); }
+        .metric-card.amp::before   { background: linear-gradient(90deg, var(--green), #00c853); }
+        .metric-card.torque::before{ background: linear-gradient(90deg, var(--purple), #7b2ff7); }
+
+        .metric-unit {
+            font-size: 9px;
+            letter-spacing: 1.5px;
+            margin-bottom: 4px;
+            opacity: 0.55;
+        }
+        .metric-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 20px;
+            font-weight: 900;
+            line-height: 1;
+            letter-spacing: 1px;
+        }
+        .metric-name {
+            font-size: 8.5px;
+            letter-spacing: 1.5px;
+            margin-top: 4px;
+            opacity: 0.4;
+        }
+        .metric-card.watt  .metric-value { color: var(--amber);  text-shadow: 0 0 14px rgba(255,179,0,0.5); }
+        .metric-card.volt  .metric-value { color: var(--cyan);   text-shadow: 0 0 14px rgba(0,229,255,0.5); }
+        .metric-card.amp   .metric-value { color: var(--green);  text-shadow: 0 0 14px rgba(0,255,157,0.5); }
+        .metric-card.torque .metric-value { color: var(--purple); text-shadow: 0 0 14px rgba(199,125,255,0.5); }
+
+        /* Power bar */
+        .power-bar-wrap {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.07);
+        }
+        .power-bar-label {
+            display: flex; justify-content: space-between;
+            font-size: 9.5px; color: rgba(255,255,255,0.4); margin-bottom: 6px;
+        }
+        .power-bar-track {
+            height: 7px; background: rgba(255,255,255,0.06);
+            border-radius: 4px; overflow: hidden;
+        }
+        .power-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #00c853, var(--amber), var(--red));
+            transition: width 0.35s ease;
+            width: 0%;
+        }
+        .power-bar-ticks {
+            display: flex; justify-content: space-between;
+            font-size: 8.5px; color: rgba(255,255,255,0.25); margin-top: 3px;
+        }
+
+        /* Efficiency row */
+        .eff-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-top: 8px; font-size: 10px;
+        }
+        .eff-label { color: rgba(255,255,255,0.35); }
+        .eff-val { color: var(--green); font-weight: 600; }
+
+        /* ══ BOTTOM CENTER — HINT ══════════════════════════════════════ */
+        #hint {
+            position: absolute;
+            bottom: 12px; left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: rgba(255,255,255,0.22);
+            letter-spacing: 1px;
+            white-space: nowrap;
+            z-index: 10;
+        }
+
+        /* ══ BOTTOM OSCILLOSCOPE — POWER WAVEFORM ═══════════════════════ */
+        #oscilloscope {
+            position: absolute;
+            bottom: 32px; left: 50%; transform: translateX(-50%);
+            width: 320px; height: 60px;
+            background: rgba(8, 14, 32, 0.85);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            z-index: 10;
+            backdrop-filter: blur(8px);
+        }
+        #oscilloscope canvas { width: 100%; height: 100%; }
+        #osc-label {
+            position: absolute;
+            top: 4px; left: 8px;
+            font-size: 8.5px; color: rgba(0,229,255,0.5);
+            letter-spacing: 1.5px; pointer-events: none;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+<!-- HEADER -->
+<div id="header">
+    <span class="logo">WINDCFD</span>
+    <span class="subtitle">3D COMPUTATIONAL FLUID DYNAMICS — WIND TURBINE SIMULATOR</span>
+    <span style="display:flex;align-items:center;">
+        <span class="status-dot"></span>
+        <span class="status-text">LIVE SIM</span>
+    </span>
+</div>
+
+<!-- LEFT PANEL: CFD PARAMETERS -->
+<div id="left-panel">
+    <div class="panel-title">CFD PARAMETERS</div>
+    <div class="param-row"><span class="param-label">Rotor Radius (R)</span><span class="param-val">1.3184 m</span></div>
+    <div class="param-row"><span class="param-label">Wind Speed (V)</span><span class="param-val">2.8 m/s</span></div>
+    <div class="param-row"><span class="param-label">Rotor Speed</span><span class="param-val">69.23 RPM</span></div>
+    <div class="param-row"><span class="param-label">Air Density (p)</span><span class="param-val">1.225 kg/m3</span></div>
+    <div class="param-row"><span class="param-label">TSR (lambda)</span><span class="param-val">3.4136</span></div>
+    <div class="param-row"><span class="param-label">Swept Area (A)</span><span class="param-val">5.464 m2</span></div>
+    <div class="param-row"><span class="param-label">Cp (Power Coeff)</span><span class="param-val">0.35</span></div>
+    <div class="legend-wrap">
+        <div class="legend-label">Velocity Magnitude (m/s)</div>
+        <div class="legend-bar"></div>
+        <div class="legend-ticks"><span>0.5</span><span>1.65</span><span>2.8</span></div>
+    </div>
+</div>
+
+<!-- RIGHT PANEL: GENERATOR OUTPUT -->
+<div id="right-panel">
+    <div class="panel-title">10W GENERATOR — ELECTRICAL OUTPUT</div>
+
+    <div class="metric-grid">
+        <div class="metric-card watt">
+            <div class="metric-unit">POWER</div>
+            <div class="metric-value" id="val-watt">0.00</div>
+            <div class="metric-name">WATTS</div>
+        </div>
+        <div class="metric-card volt">
+            <div class="metric-unit">VOLTAGE</div>
+            <div class="metric-value" id="val-volt">0.00</div>
+            <div class="metric-name">VOLTS</div>
+        </div>
+        <div class="metric-card amp">
+            <div class="metric-unit">CURRENT</div>
+            <div class="metric-value" id="val-amp">0.00</div>
+            <div class="metric-name">AMPS</div>
+        </div>
+        <div class="metric-card torque">
+            <div class="metric-unit">TORQUE</div>
+            <div class="metric-value" id="val-torque">0.00</div>
+            <div class="metric-name">N·m</div>
+        </div>
+    </div>
+
+    <div class="power-bar-wrap">
+        <div class="power-bar-label">
+            <span>OUTPUT LOAD</span>
+            <span id="pct-label">0%</span>
+        </div>
+        <div class="power-bar-track">
+            <div class="power-bar-fill" id="power-fill"></div>
+        </div>
+        <div class="power-bar-ticks"><span>0W</span><span>5W</span><span>10W</span></div>
+    </div>
+
+    <div class="eff-row">
+        <span class="eff-label">Generator Efficiency</span>
+        <span class="eff-val" id="val-eff">-- %</span>
+    </div>
+</div>
+
+<!-- OSCILLOSCOPE -->
+<div id="oscilloscope">
+    <canvas id="osc-canvas" width="320" height="60"></canvas>
+    <span id="osc-label">OUTPUT POWER WAVEFORM</span>
+</div>
+
+<!-- HINT -->
+<div id="hint">Drag: Rotate | Scroll: Zoom | Right-click: Pan</div>
+
+<script>
+(function () {
+    /* ═══════════════════════════════════════════════════
+       THREE.JS SCENE SETUP  (hi-res renderer)
+    ═══════════════════════════════════════════════════ */
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x04060f);
+    scene.fog = new THREE.FogExp2(0x04060f, 0.038);
+
+    const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 300);
+    camera.position.set(3.5, 1.2, 4.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+    renderer.domElement.style.position = 'absolute';
+    renderer.domElement.style.top = '0';
+    renderer.domElement.style.left = '0';
+    renderer.domElement.style.zIndex = '1';
+
+    /* ── Orbit controls (inline) ─────────────────────── */
+    const mouse = { button: -1, lastX: 0, lastY: 0 };
+    let sph = { theta: 0.8, phi: 1.1, r: 6.5 };
+    const pan = new THREE.Vector3();
+
+    renderer.domElement.addEventListener('mousedown', e => { mouse.button = e.button; mouse.lastX = e.clientX; mouse.lastY = e.clientY; });
+    renderer.domElement.addEventListener('mouseup', () => mouse.button = -1);
+    renderer.domElement.addEventListener('mousemove', e => {
+        const dx = e.clientX - mouse.lastX, dy = e.clientY - mouse.lastY;
+        mouse.lastX = e.clientX; mouse.lastY = e.clientY;
+        if (mouse.button === 0) {
+            sph.theta -= dx * 0.004;
+            sph.phi = Math.max(0.08, Math.min(Math.PI - 0.08, sph.phi + dy * 0.004));
+        } else if (mouse.button === 2) {
+            pan.x -= dx * 0.003;
+            pan.y += dy * 0.003;
+        }
+    });
+    renderer.domElement.addEventListener('wheel', e => {
+        sph.r = Math.max(1.5, Math.min(22, sph.r + e.deltaY * 0.007));
+    }, { passive: true });
+    renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+
+    function updateCamera() {
+        const x = sph.r * Math.sin(sph.phi) * Math.sin(sph.theta);
+        const y = sph.r * Math.cos(sph.phi);
+        const z = sph.r * Math.sin(sph.phi) * Math.cos(sph.theta);
+        camera.position.set(x + pan.x, y + pan.y, z);
+        camera.lookAt(pan.x, pan.y, 0);
+    }
+
+    /* ── Lighting ────────────────────────────────────── */
+    scene.add(new THREE.AmbientLight(0x1a2a4a, 1.5));
+    const sun = new THREE.DirectionalLight(0xfff5e0, 1.4);
+    sun.position.set(6, 12, 8);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    scene.add(sun);
+    const rimLight = new THREE.DirectionalLight(0x00e5ff, 0.45);
+    rimLight.position.set(-6, 3, -4);
+    scene.add(rimLight);
+    const fillLight = new THREE.PointLight(0x00ff9d, 0.3, 12);
+    fillLight.position.set(2, 1, 2);
+    scene.add(fillLight);
+
+    /* ── Ground plane + grid ─────────────────────────── */
+    const groundGeo = new THREE.PlaneGeometry(28, 28);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x080d18, roughness: 0.9, metalness: 0.0 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -2.1;
+    ground.receiveShadow = true;
+    scene.add(ground);
+    const grid = new THREE.GridHelper(24, 36, 0x1a2a44, 0x0d1524);
+    grid.position.y = -2.09;
+    scene.add(grid);
+
+    /* ══ TURBINE ═══════════════════════════════════════ */
+    const turbine = new THREE.Group();
+    scene.add(turbine);
+
+    // Tower
+    const towerMat = new THREE.MeshStandardMaterial({ color: 0xe0e4ec, roughness: 0.45, metalness: 0.3 });
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.105, 2.25, 24), towerMat);
+    tower.position.y = -0.9;
+    tower.castShadow = true;
+    turbine.add(tower);
+
+    // Base flange
+    const flange = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.06, 24), towerMat);
+    flange.position.y = -2.02;
+    turbine.add(flange);
+
+    // Nacelle
+    const nacGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.34, 20);
+    nacGeo.rotateX(Math.PI / 2);
+    const nacelle = new THREE.Mesh(nacGeo, towerMat);
+    nacelle.position.z = -0.05;
+    nacelle.castShadow = true;
+    turbine.add(nacelle);
+
+    // Hub
+    const hubMat = new THREE.MeshStandardMaterial({ color: 0xd0d5e8, roughness: 0.28, metalness: 0.55 });
+    const hub = new THREE.Mesh(new THREE.SphereGeometry(0.105, 24, 24), hubMat);
+    hub.position.z = 0.13;
+    turbine.add(hub);
+
+    // Rotor
+    const rotor = new THREE.Group();
+    rotor.position.z = 0.14;
+    turbine.add(rotor);
+
+    const chords = [0.22, 0.25, 0.23, 0.21, 0.19, 0.16, 0.14, 0.12, 0.10, 0.075];
+    const twists = [17.0, 15.1, 13.2, 11.3, 9.4, 7.5, 5.7, 3.8, 1.9, 0.0];
+    const R = 1.318371;
+
+    function buildBlade() {
+        const NS = chords.length, NP = 28;
+        const verts = [], idx = [], cols = [];
+        for (let s = 0; s < NS; s++) {
+            const rf = s / (NS - 1);
+            const rp = 0.10 + rf * (R - 0.10);
+            const ch = chords[s];
+            const tw = twists[s] * Math.PI / 180;
+            const tk = 0.30 - 0.09 * rf;
+            for (let p = 0; p < NP; p++) {
+                let xaf, yaf;
+                if (p < NP / 2) {
+                    xaf = p / (NP / 2 - 1);
+                    yaf =  5 * tk * (0.2969 * Math.sqrt(xaf) - 0.1260 * xaf - 0.3516 * xaf * xaf + 0.2843 * Math.pow(xaf, 3) - 0.1015 * Math.pow(xaf, 4));
+                } else {
+                    xaf = (NP - 1 - p) / (NP / 2 - 1);
+                    yaf = -5 * tk * (0.2969 * Math.sqrt(xaf) - 0.1260 * xaf - 0.3516 * xaf * xaf + 0.2843 * Math.pow(xaf, 3) - 0.1015 * Math.pow(xaf, 4));
+                }
+                const xs = (xaf - 0.25) * ch;
+                const ys = yaf * ch;
+                const xr = xs * Math.cos(tw) - ys * Math.sin(tw);
+                const yr = xs * Math.sin(tw) + ys * Math.cos(tw);
+                verts.push(xr, rp, yr);
+                cols.push(0.90, 0.92, 0.96);
+            }
+        }
+        for (let s = 0; s < NS - 1; s++) {
+            for (let p = 0; p < NP - 1; p++) {
+                const a = s * NP + p, b = a + 1, c = (s + 1) * NP + p, d = c + 1;
+                idx.push(a, c, b, b, c, d);
+            }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+        geo.setIndex(idx);
+        geo.computeVertexNormals();
+        return geo;
+    }
+
+    const bladeGeo = buildBlade();
+    const bladeMat = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        roughness: 0.18,
+        metalness: 0.12,
+        side: THREE.DoubleSide,
+        envMapIntensity: 1.2
+    });
+    for (let b = 0; b < 3; b++) {
+        const m = new THREE.Mesh(bladeGeo, bladeMat);
+        m.rotation.z = b * (Math.PI * 2 / 3);
+        m.castShadow = true;
+        rotor.add(m);
+    }
+
+    /* ══ CFD PARTICLES ══════════════════════════════════ */
+    const PC = 4200;
+    const pPos = new Float32Array(PC * 3);
+    const pCol = new Float32Array(PC * 3);
+    const pSpd = new Float32Array(PC);
+    const V0 = 2.8, IND = 0.26;
+
+    for (let i = 0; i < PC; i++) {
+        pPos[i*3]   = (Math.random() - 0.5) * 3.8;
+        pPos[i*3+1] = (Math.random() - 0.5) * 3.8;
+        pPos[i*3+2] = -5.5 - Math.random() * 4.5;
+        pSpd[i] = 0.7 + Math.random() * 0.6;
+        pCol[i*3] = 0; pCol[i*3+1] = 0.8; pCol[i*3+2] = 1;
+    }
+
+    const pGeo = new THREE.BufferGeometry();
+    pGeo.setAttribute('position', new THREE.Float32BufferAttribute(pPos, 3));
+    pGeo.setAttribute('color', new THREE.Float32BufferAttribute(pCol, 3));
+    const pMat = new THREE.PointsMaterial({
+        size: 0.026, vertexColors: true,
+        transparent: true, opacity: 0.78,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    scene.add(new THREE.Points(pGeo, pMat));
+
+    function fluidVel(x, y, z) {
+        const r = Math.sqrt(x * x + y * y);
+        let vz = V0, vx = 0, vy = 0;
+        const zr = z - 0.14;
+        if (r < R * 1.7) {
+            if (zr < -0.4) {
+                vz *= (1 - (IND / 2) * Math.exp(zr));
+            } else if (zr < 0) {
+                vz *= (1 - IND * (1 + zr));
+            } else if (zr < 8) {
+                const wr = R * (1 + 0.13 * zr);
+                if (r <= wr) {
+                    vz *= Math.max(0.16, 1 - 2 * IND * Math.exp(-zr * 0.14));
+                    const ang = Math.atan2(y, x);
+                    const vt = (2 * IND * V0 * R) / (r + 0.15) * Math.exp(-zr * 0.38);
+                    vx = -vt * Math.sin(ang);
+                    vy =  vt * Math.cos(ang);
+                }
+            }
+        }
+        return { x: vx, y: vy, z: vz };
+    }
+
+    function velColor(vm) {
+        const n = Math.min(Math.max((vm - 0.5) / 2.3, 0), 1);
+        if (n < 0.25) return [0, n * 4, 1];
+        if (n < 0.5)  return [0, 1, 1 - (n - 0.25) * 4];
+        if (n < 0.75) return [(n - 0.5) * 4, 1, 0];
+        return [1, 1 - (n - 0.75) * 4, 0];
+    }
+
+    /* ══ GENERATOR PHYSICS (10 W rated) ════════════════
+       Model: PMDC generator, Vrated=12V, Prated=10W
+       V_oc = K_e * omega (open-circuit voltage)
+       Ri   = internal resistance
+       Load = external resistive load (for max power)
+       ═════════════════════════════════════════════════ */
+    const P_RATED   = 10;    // W
+    const V_RATED   = 12;    // V
+    const I_RATED   = P_RATED / V_RATED;            // 0.833 A
+    const OMEGA_NOM = 69.23 * 2 * Math.PI / 60;    // 7.249 rad/s
+    const Ke        = V_RATED / OMEGA_NOM;          // V/(rad/s)
+    const Ri        = 2.0;                          // internal resistance (ohm)
+    const Cp        = 0.35;                         // power coefficient
+    const rho       = 1.225;
+    const A_swept   = Math.PI * R * R;
+
+    /* ═══════════════════════════════════════════════════
+       OSCILLOSCOPE CANVAS
+    ═══════════════════════════════════════════════════ */
+    const oscCanvas = document.getElementById('osc-canvas');
+    const oscCtx    = oscCanvas.getContext('2d');
+    const oscBuffer = new Array(320).fill(0);
+
+    function drawOscilloscope(wattValue) {
+        oscBuffer.push(wattValue);
+        if (oscBuffer.length > 320) oscBuffer.shift();
+
+        oscCtx.clearRect(0, 0, 320, 60);
+        oscCtx.fillStyle = 'rgba(4,6,15,0)';
+        oscCtx.fillRect(0, 0, 320, 60);
+
+        // Grid lines
+        oscCtx.strokeStyle = 'rgba(0,229,255,0.07)';
+        oscCtx.lineWidth = 1;
+        for (let y = 0; y <= 60; y += 15) {
+            oscCtx.beginPath(); oscCtx.moveTo(0, y); oscCtx.lineTo(320, y); oscCtx.stroke();
+        }
+        for (let x = 0; x <= 320; x += 64) {
+            oscCtx.beginPath(); oscCtx.moveTo(x, 0); oscCtx.lineTo(x, 60); oscCtx.stroke();
+        }
+
+        // Waveform
+        const grad = oscCtx.createLinearGradient(0, 0, 320, 0);
+        grad.addColorStop(0, 'rgba(0,255,157,0)');
+        grad.addColorStop(0.3, 'rgba(0,255,157,0.9)');
+        grad.addColorStop(1, 'rgba(255,179,0,1)');
+        oscCtx.strokeStyle = grad;
+        oscCtx.lineWidth = 1.8;
+        oscCtx.shadowBlur = 6;
+        oscCtx.shadowColor = '#00ff9d';
+        oscCtx.beginPath();
+        for (let i = 0; i < oscBuffer.length; i++) {
+            const x = i;
+            const y = 58 - (oscBuffer[i] / P_RATED) * 54;
+            if (i === 0) oscCtx.moveTo(x, y); else oscCtx.lineTo(x, y);
+        }
+        oscCtx.stroke();
+        oscCtx.shadowBlur = 0;
+    }
+
+    /* ══ DOM REFS ═══════════════════════════════════════ */
+    const elWatt   = document.getElementById('val-watt');
+    const elVolt   = document.getElementById('val-volt');
+    const elAmp    = document.getElementById('val-amp');
+    const elTorque = document.getElementById('val-torque');
+    const elEff    = document.getElementById('val-eff');
+    const elFill   = document.getElementById('power-fill');
+    const elPct    = document.getElementById('pct-label');
+
+    let uiTimer = 0;
+
+    /* ══ ANIMATION LOOP ═════════════════════════════════ */
+    const OMEGA_rad = 7.24983;
+    const clock = new THREE.Clock();
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const dt = Math.min(clock.getDelta(), 0.05);
+        rotor.rotation.z += OMEGA_rad * dt;
+
+        /* ── Particle update ────────────────────────── */
+        const pa = pGeo.getAttribute('position');
+        const ca = pGeo.getAttribute('color');
+        for (let i = 0; i < PC; i++) {
+            let px = pa.getX(i), py = pa.getY(i), pz = pa.getZ(i);
+            const v = fluidVel(px, py, pz);
+            px += v.x * dt * pSpd[i];
+            py += v.y * dt * pSpd[i];
+            pz += v.z * dt * pSpd[i];
+            if (pz > 6.5 || Math.abs(px) > 3.8 || Math.abs(py) > 3.8) {
+                px = (Math.random() - 0.5) * 3.8;
+                py = (Math.random() - 0.5) * 3.8;
+                pz = -5.5 - Math.random() * 2.5;
+            }
+            pa.setXYZ(i, px, py, pz);
+            const vm = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
+            const [r, g, b] = velColor(vm);
+            ca.setXYZ(i, r, g, b);
+        }
+        pa.needsUpdate = true;
+        ca.needsUpdate = true;
+
+        /* ── Generator electrical model ─────────────── */
+        // Small fluctuation to simulate realistic ripple
+        const ripple = 1.0 + 0.018 * Math.sin(clock.elapsedTime * 4.3)
+                           + 0.009 * Math.sin(clock.elapsedTime * 11.7);
+        const omega_inst = OMEGA_rad * ripple;
+
+        // P_wind available
+        const P_wind = 0.5 * rho * A_swept * Math.pow(V0, 3);  // ~73.5 W
+        // Mechanical power extracted (Cp)
+        const P_mech = P_wind * Cp;                              // ~25.7 W
+        // Generator: EMF = Ke * omega
+        const emf = Ke * omega_inst;                             // ~12 V
+
+        // Optimal load resistance for max power = Ri (matched load)
+        // For a rated 10W output we set R_load so P_load = 10W
+        // P_load = emf^2 * R_load / (Ri + R_load)^2
+        // Solved: R_load = 2.88 ohm gives ~10W at nominal
+        const R_load = 2.88;
+        const I_gen = emf / (Ri + R_load);
+        const V_load = I_gen * R_load;
+        const P_gen  = V_load * I_gen;                           // watts
+
+        // Torque on generator shaft
+        const T_gen = P_gen / omega_inst;                        // N·m (electromagnetic braking torque)
+
+        // Efficiency = P_electrical / P_mechanical
+        const eff = Math.min(99.9, (P_gen / P_mech) * 100);
+
+        /* ── Update UI every 60ms ───────────────────── */
+        uiTimer += dt;
+        if (uiTimer > 0.06) {
+            uiTimer = 0;
+            elWatt.textContent   = P_gen.toFixed(2);
+            elVolt.textContent   = V_load.toFixed(2);
+            elAmp.textContent    = I_gen.toFixed(3);
+            elTorque.textContent = T_gen.toFixed(3);
+            elEff.textContent    = eff.toFixed(1) + ' %';
+
+            const pct = Math.min(100, (P_gen / P_RATED) * 100);
+            elFill.style.width = pct.toFixed(1) + '%';
+            elPct.textContent  = pct.toFixed(0) + '%';
+
+            drawOscilloscope(P_gen);
+        }
+
+        updateCamera();
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+    });
+
+    animate();
+})();
+</script>
+</body>
+</html>
+```
