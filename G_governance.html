@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Good Governance Space Station</title>
+    <style>
+        /* CSS: Space LED / Cyberpunk Neon Theme */
+        body {
+            background-color: #030712;
+            color: #93c5fd;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+            transition: background-color 0.2s ease;
+        }
+
+        .container {
+            max-width: 700px;
+            width: 100%;
+            background: rgba(15, 23, 42, 0.8);
+            border: 2px solid #1e40af;
+            box-shadow: 0 0 20px rgba(30, 64, 175, 0.5), inset 0 0 15px rgba(30, 64, 175, 0.3);
+            border-radius: 12px;
+            padding: 25px;
+            margin-top: 20px;
+            position: relative;
+        }
+
+        h1 {
+            color: #38bdf8;
+            text-align: center;
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+        }
+
+        /* Status Bar Display */
+        .status-panel {
+            background: #0f172a;
+            border: 1px solid #3b82f6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 25px;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+        }
+
+        .status-text {
+            color: #38bdf8;
+            font-weight: bold;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .energy-bar-bg {
+            background: #1e293b;
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #3b82f6;
+        }
+
+        .energy-bar-fill {
+            background: linear-gradient(90deg, #ef4444 0%, #3b82f6 100%);
+            width: 100%;
+            height: 100%;
+            transition: width 0.5s ease;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.7);
+        }
+
+        /* Question & Options Area */
+        .question-box {
+            margin-bottom: 20px;
+        }
+
+        .mission-title {
+            color: #f43f5e;
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+            text-shadow: 0 0 5px rgba(244, 63, 94, 0.4);
+        }
+
+        .situation-text {
+            color: #e2e8f0;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            background: rgba(30, 41, 59, 0.5);
+            padding: 12px;
+            border-left: 4px solid #38bdf8;
+            border-radius: 4px;
+        }
+
+        .option-btn {
+            display: block;
+            width: 100%;
+            background: #1e293b;
+            border: 1px solid #475569;
+            color: #cbd5e1;
+            padding: 14px 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: left;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        /* LED Glowing Effects for Option Buttons */
+        .option-btn:hover {
+            background: #0f172a;
+            color: #fff;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+            border-color: #38bdf8;
+            transform: translateX(5px);
+        }
+
+        /* Answer Feedback Panel */
+        .feedback {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            display: none;
+            text-align: center;
+        }
+
+        .feedback.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid #10b981;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+        }
+
+        .feedback.warning {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid #ef4444;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+        }
+
+        .next-btn {
+            display: none;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 20px auto 0 auto;
+            font-weight: bold;
+            box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
+        }
+
+        .next-btn:hover {
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.8);
+        }
+
+        /* End Mission Summary Screen */
+        #summary-screen {
+            display: none;
+            text-align: center;
+        }
+
+        .summary-title {
+            color: #10b981;
+            font-size: 1.8rem;
+            text-shadow: 0 0 15px rgba(16, 185, 129, 0.6);
+            margin-bottom: 15px;
+        }
+
+        .summary-title.failed {
+            color: #ef4444;
+            text-shadow: 0 0 15px rgba(239, 68, 68, 0.8);
+        }
+
+        .restart-btn {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+
+        /* --- ANIMATIONS (BOOM & SHAKE EFFECTS) --- */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(0px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(2px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(2px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+
+        .shake-effect {
+            animation: shake 0.4s;
+            animation-iteration-count: 2;
+        }
+
+        /* Boom overlay element */
+        .boom-flash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(239, 68, 68, 0.4);
+            box-shadow: inset 0 0 100px rgba(239, 68, 68, 0.9);
+            z-index: 9999;
+            pointer-events: none;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Visual Boom Overlay Element -->
+    <div id="boom-overlay" class="boom-flash"></div>
+
+    <div id="main-container" class="container">
+        <h1>🌌 GOOD GOVERNANCE SPACE STATION</h1>
+        
+        <!-- Energy Core & Status Bar -->
+        <div class="status-panel">
+            <div class="status-text">
+                <span>[ SYSTEM STATUS: ONLINE ]</span>
+                <span id="energy-text">[ ENERGY CORE: 100% ] 🔵</span>
+            </div>
+            <div class="energy-bar-bg">
+                <div id="energy-bar" class="energy-bar-fill"></div>
+            </div>
+        </div>
+
+        <!-- Gameplay Screen -->
+        <div id="game-screen">
+            <div class="question-box">
+                <div id="mission-id" class="mission-title">📥 Mission 1</div>
+                <div id="situation" class="situation-text">Loading mission data...</div>
+                
+                <div id="options-container">
+                    <!-- Option buttons will be dynamically generated here -->
+                </div>
+            </div>
+
+            <div id="feedback-box" class="feedback"></div>
+            <button id="next-button" class="next-btn" onclick="nextQuestion()">NEXT MISSION ➔</button>
+        </div>
+
+        <!-- Summary Screen -->
+        <div id="summary-screen">
+            <div id="summary-headline" class="summary-title">🏆 [ MISSION COMPLETED ]</div>
+            <p id="summary-text" style="line-height: 1.6; color: #e2e8f0;"></p>
+            <p id="final-score" style="font-weight: bold; color: #38bdf8; margin: 20px 0; font-family: monospace;"></p>
+            <button class="restart-btn" onclick="restartGame()">REBOOT SYSTEM (REPLAY)</button>
+        </div>
+    </div>
+
+    <script>
+        // Quiz Data - 9 Missions mapping Good Governance principles from Good Governance.pdf
+        const quizData = [
+            {
+                mission: "📥 Mission 1: Space Emergency Department (ER)",
+                situation: "Situation: Three red-level emergency patients are admitted simultaneously, but there is only one ICU bed left. How should the head nurse decide according to the principle of Equity?",
+                options: [
+                    { text: "🔵 A: Prioritize patients who pay in advance for faster data entry.", isCorrect: false },
+                    { text: "🟢 B: Assess based on the severity of the disease and vital signs, without considering economic status or nationality.", isCorrect: true },
+                    { text: "🟣 C: Prioritize patients who are relatives of hospital staff to boost morale.", isCorrect: false }
+                ]
+            },
+            {
+                mission: "📥 Mission 2: High-Speed Pharmacy",
+                situation: "Situation: The hospital wants to reduce the waiting time for patients to receive medication from 2 hours to no more than 15 minutes to meet the Responsiveness principle. What should pharmacists do?",
+                options: [
+                    { text: "🔵 A: Strictly dispense medication on time and improve the medication dispensing system to meet patient needs.", isCorrect: true },
+                    { text: "🟢 B: Announce for patients to wait outside the building to reduce crowding in the eyes of management.", isCorrect: false },
+                    { text: "🟣 C: Distribute ready-made medication kits to everyone equally for speed, without needing to repeat the patient history taking.", isCorrect: false }
+                ]
+            },
+            {
+                mission: "📥 Task 3: Centralized Medical Supply Procurement",
+                situation: "Situation: A new ventilator, valued at 10 million baht, is being purchased. How will you act in accordance with the principle of Transparency?",
+                options: [
+                    { text: "🔵 A: Keep the machine specifications strictly confidential to prevent objections from competitors.", isCorrect: false },
+                    { text: "🟢 B: Disclose the bidding process, specifications, and median price on the hospital website for free public access.", isCorrect: true },
+                    { text: "🟣 C: Have the committee quietly sign the approval and only announce the result after the machine is delivered.", isCorrect: false }
+                ]
+            },
+            {
+                mission: "📥 Task 4: Administration and Human Resources",
+                situation: "Situation: The hospital director wants to reduce the approval process for treatment eligibility so that patients can receive special medication faster. How should the principle of Decentralization be used?",
+                options: [
+                    { text: "🔵 A: All matters must run through the director's desk alone for 100% accuracy.", isCorrect: false },
+                    { text: "🟢 B: Transfer initial decision-making authority and resource allocation to the head of the specialized clinic, who has the right to approve them independently.", isCorrect: true },
+                    { text: "🟣 C: Disband the specialized department and have patients handle matters at branches in other provinces.", isCorrect: false }
+                ]
+            },
+            {
+                mission: "📥 Mission 5: Infection Control and Prevention (IC) Department",
+                situation: "Situation: An outbreak of a mutated virus occurred in the ward. The director immediately ordered a big cleaning operation within the allocated budget. The result was 100% elimination of the virus, exactly as planned. How does this event reflect the principle of Effectiveness?",
+                options: [
+                    { text: "🔵 A: The work was done correctly according to the goals and indicators set in the operational plan.", isCorrect: true },
+                    { text: "🟢 B: The budget was exceeded by 3 times, but no one complained because the work was done.", isCorrect: false },
+                    { text: "🟣 C: The cleaning took 6 months, during which time all patients left.", isCorrect: false }
+                ]
+            },
+            {
+                mission: "📥 Mission 6: Laboratory (Lab)",
+                situation: "Situation: Medical technicians discovered that the blood test results were inaccurate in 5 cases, which could lead to incorrect medication dispensing. What should he do according to the principle of Accountability?",
+                options: [
+                    { text: "🔵 A: Quickly destroy all the lab results and subtly tell the patient to come back for a new blood test tomorrow.", isCorrect: false },
+                    { text: "🟢 B: Admit the mistake, report to the supervisor immediately, and fully cooperate in resolving the problem to ensure the patient's safety.", isCorrect: true },
+                    { text: "🟣 C: Blame the AI system or unstable electrical currents in the space system.", isCorrect: false }
+                ]
+            },
+            {
+                mission: "📥 Task 7: Hospital Development Committee",
+                situation: "Situation: The hospital is building a new psychiatric ward, but the surrounding community is concerned about safety. How should the committee use the principle of Participation?",
+                options: [
+                    { text: "🔵 A: Build first, and then send leaflets to the community later.", isCorrect: false },
+                    { text: "🟢 B: Open a forum for community representatives, staff, and stakeholders to express their opinions and make decisions together.", isCorrect: true },
+                    { text: "🟣 C: Hire a security company to fence off the area and prevent villagers from getting involved.", isCorrect: false }
+                ]
+            },
+            {
+                mission: "📥 Task 8: Medical Supply Center",
+                situation: "Situation: During a period of limited hospital budget, the head of the surgical ward manages face masks and rubber gloves using the least amount of resources while maximizing benefits and safety for personnel. Which principle of Efficiency does this apply to?",
+                options: [
+                    { text: "🔵 A: Manage operations using the least amount of resources (money, people, time) while maximizing benefits for service recipients.", isCorrect: true },
+                    { text: "🟢 B: Order the lowest grade items to ensure leftover funds go into the central fund.", isCorrect: false },
+                    { text: "🟣 C: Mandate nurses wash and reuse rubber gloves 5 times to save money.", isCorrect: false }
+                ]
+            },
+            {
+                mission: "📥 Task 9: Subcommittee for Considering Complaints",
+                situation: "Situation: A conflict has arisen regarding holiday scheduling between senior and junior nurses, leading to strained relations. How should the Chairperson of the Committee combine Consensus Oriented and Rule of Law principles?",
+                options: [
+                    { text: "🔵 A: Impose severe laws and penalties, revoking leave for all those who protest.", isCorrect: false },
+                    { text: "🟢 B: Enforce regulations fairly and without discrimination, while also engaging in negotiations and mediation to find common ground acceptable to all parties without objections.", isCorrect: true },
+                    { text: "🟣 C: Allow a majority vote; those with fewer votes must accept the outcome according to the regulations.", isCorrect: false }
+                ]
+            }
+        ];
+
+        let currentQuestionIndex = 0;
+        let energy = 100;
+        let correctAnswersCount = 0;
+
+        // Load current question
+        function loadQuestion() {
+            const currentQuestion = quizData[currentQuestionIndex];
+            
+            document.getElementById("next-button").style.display = "none";
+            const feedbackBox = document.getElementById("feedback-box");
+            feedbackBox.style.display = "none";
+            feedbackBox.className = "feedback";
+
+            document.getElementById("mission-id").innerText = currentQuestion.mission;
+            document.getElementById("situation").innerText = currentQuestion.situation;
+
+            const optionsContainer = document.getElementById("options-container");
+            optionsContainer.innerHTML = "";
+
+            currentQuestion.options.forEach((option) => {
+                const button = document.createElement("button");
+                button.className = "option-btn";
+                button.innerText = option.text;
+                button.onclick = () => selectOption(button, option.isCorrect);
+                optionsContainer.appendChild(button);
+            });
+        }
+
+        // Handle option selection & calculate energy core mechanics
+        function selectOption(selectedButton, isCorrect) {
+            const buttons = document.querySelectorAll(".option-btn");
+            buttons.forEach(btn => btn.disabled = true);
+
+            const feedbackBox = document.getElementById("feedback-box");
+            
+            if (isCorrect) {
+                feedbackBox.innerText = "🟢 SYSTEM STABLE: Correct answer according to Good Governance. Energy restored!";
+                feedbackBox.classList.add("success");
+                correctAnswersCount++;
+                if(energy < 100) energy = Math.min(100, energy + 10);
+            } else {
+                feedbackBox.innerText = "🔴 WARNING ALERT: Action contradicts Good Governance. Energy core shaken!";
+                feedbackBox.classList.add("warning");
+                energy = Math.max(10, energy - 15); 
+                
+                // TRIGGER BOOM & SHAKE ONLY IF SCORE (CORRECT ANSWERS) IS LESS THAN 5
+                if (correctAnswersCount < 5) {
+                    triggerBoomEffect();
+                }
+            }
+
+            updateEnergyBar();
+            
+            feedbackBox.style.display = "block";
+            document.getElementById("next-button").style.display = "block";
+        }
+
+        // Trigger Boom Screen Flash and Shake Animation
+        function triggerBoomEffect() {
+            const container = document.getElementById("main-container");
+            const overlay = document.getElementById("boom-overlay");
+            
+            // Add red flash overlay
+            overlay.style.display = "block";
+            setTimeout(() => { overlay.style.display = "none"; }, 500);
+            
+            // Add container shake effect
+            container.classList.add("shake-effect");
+            // Remove class after animation finishes so it can be re-triggered
+            setTimeout(() => { container.classList.remove("shake-effect"); }, 800);
+        }
+
+        // Update CSS/HTML Energy bar states
+        function updateEnergyBar() {
+            const energyBar = document.getElementById("energy-bar");
+            const energyText = document.getElementById("energy-text");
+            
+            energyBar.style.width = energy + "%";
+            
+            if (energy > 50) {
+                energyText.innerHTML = `[ ENERGY CORE: ${energy}% ] 🔵`;
+                energyBar.style.background = "linear-gradient(90deg, #ef4444 0%, #3b82f6 100%)";
+            } else {
+                energyText.innerHTML = `[ ENERGY CORE: ${energy}% ] 🔴 SYSTEM UNSTABLE!`;
+                energyBar.style.background = "linear-gradient(90deg, #b91c1c 0%, #f43f5e 100%)";
+            }
+        }
+
+        // Progress to next screen or complete missions
+        function nextQuestion() {
+            currentQuestionIndex++;
+            if (currentQuestionIndex < quizData.length) {
+                loadQuestion();
+            } else {
+                showSummary();
+            }
+        }
+
+        // Summary View based on final score evaluation
+        function showSummary() {
+            document.getElementById("game-screen").style.display = "none";
+            const summaryScreen = document.getElementById("summary-screen");
+            const headline = document.getElementById("summary-headline");
+            const text = document.getElementById("summary-text");
+            
+            summaryScreen.style.display = "block";
+            document.getElementById("final-score").innerText = `CORE INTEGRITY STATUS: Successfully Cleared ${correctAnswersCount} / 9 Missions | Remaining Energy Core: ${energy}%`;
+            
+            if (correctAnswersCount >= 5) {
+                headline.innerText = "🏆 [ MISSION COMPLETED ]";
+                headline.className = "summary-title";
+                text.innerHTML = "The green LED lights flash brightly! The station's energy core has been stabilized and optimized. The warning sirens fall silent... <br>You have successfully saved this hospital space station by interviewing staff based on the principles of Good Governance!";
+            } else {
+                headline.innerText = "💥 [ CRITICAL CRISIS AVERTED ]";
+                headline.className = "summary-title failed";
+                text.innerHTML = "BOOM! Multiple micro-explosions breached the auxiliary sectors due to systemic failures! The core did not fully detonate, but the station is on life support. <br>You must study the principles of Good Governance thoroughly to repair the facility structure!";
+            }
+        }
+
+        // Reboot Game Loop
+        function restartGame() {
+            currentQuestionIndex = 0;
+            energy = 100;
+            correctAnswersCount = 0;
+            updateEnergyBar();
+            document.getElementById("game-screen").style.display = "block";
+            document.getElementById("summary-screen").style.display = "none";
+            loadQuestion();
+        }
+
+        window.onload = loadQuestion;
+    </script>
+</body>
+</html>
