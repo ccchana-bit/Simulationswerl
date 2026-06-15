@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>Wind Turbine Shadow Flicker CFD & Sun Path Simulation</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #06060c; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #fff; }
+        #control-panel { position: absolute; top: 10px; left: 10px; background: rgba(10, 10, 20, 0.85); padding: 20px; border-radius: 12px; max-width: 350px; font-size: 13px; line-height: 1.5; border: 1px solid #334155; box-shadow: 0 4px 20px rgba(0,0,0,0.5); backdrop-filter: blur(8px); }
+        h1 { margin: 0 0 5px 0; font-size: 16px; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px; }
+        h2 { margin: 15px 0 5px 0; font-size: 12px; color: #94a3b8; border-bottom: 1px solid #334155; padding-bottom: 3px; }
+        .param { display: flex; justify-content: space-between; margin-bottom: 6px; align-items: center; }
+        .slider-container { display: flex; flex-direction: column; margin-bottom: 8px; }
+        .slider-container label { display: flex; justify-content: space-between; margin-bottom: 2px; color: #cbd5e1; }
+        input[type=range] { width: 100%; accent-color: #38bdf8; background: #1e293b; height: 6px; border-radius: 3px; outline: none; }
+        .status-badge { padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; }
+        .flicker-active { background-color: #ef4444; color: #fff; animation: pulse 1s infinite; }
+        .flicker-inactive { background-color: #22c55e; color: #fff; }
+        
+        #chart-panel { position: absolute; bottom: 20px; left: 10px; right: 10px; height: 120px; background: rgba(10, 10, 20, 0.85); border-radius: 12px; border: 1px solid #334155; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); backdrop-filter: blur(8px); display: flex; flex-direction: column; }
+        .chart-title { font-size: 12px; color: #38bdf8; margin-bottom: 5px; font-weight: bold; }
+        .canvas-container { flex-grow: 1; position: relative; }
+        canvas { width: 100%; height: 100%; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="control-panel">
+        <h1>Shadow Flicker & Sun Path</h1>
+        <p style="font-size: 11px; color: #94a3b8; margin: 0 0 15px 0;">แบบจำลองทางคณิตศาสตร์ความแม่นยำสูง (Numerical Ray-Tracing) อ้างอิงตามสมการเรขาคณิตดวงอาทิตย์ในบทความวิจัย Energies 2025</p>
+        
+        <h2>ตัวแปรตำแหน่งดวงอาทิตย์ (Solar Position)</h2>
+        <div class="slider-container">
+            <label><span>มุมทิศดวงอาทิตย์ (Azimuth &psi;):</span> <span id="val-azimuth">135°</span></label>
+            <input type="range" id="slide-azimuth" min="0" max="360" value="135">
+        </div>
+        <div class="slider-container">
+            <label><span>มุมเงยดวงอาทิตย์ (Elevation &theta;):</span> <span id="val-elevation">30°</span></label>
+            <input type="range" id="slide-elevation" min="5" max="85" value="30">
+        </div>
+
+        <h2>ตัวแปรกังหันลม (Rotor จากรูปก่อนหน้า)</h2>
+        <div class="param"><span>รัศมีใบพัด (R_tur):</span> <span>1.318 m</span></div>
+        <div class="param"><span>ความเร็วรอบหมุน:</span> <span>69.23 RPM</span></div>
+        <div class="slider-container">
+            <label><span>ทิศทางหน้าโรเตอร์ (Yaw):</span> <span id="val-yaw">180°</span></label>
+            <input type="range" id="slide-yaw" min="0" max="360" value="180">
+        </div>
+
+        <h2>ตำแหน่งตัวรับบนพื้นดิน (Receiver Position)</h2>
+        <div class="slider-container">
+            <label><span>พิกัดแกน X (ด้านข้าง):</span> <span id="val-recX">1.5 m</span></label>
+            <input type="range" id="slide-recX" min="-5" max="5" step="0.1" value="1.5">
+        </div>
+        <div class="slider-container">
+            <label><span>พิกัดแกน Z (ระยะห่างหลังกังหัน):</span> <span id="val-recZ">3.0 m</span></label>
+            <input type="range" id="slide-recZ" min="1" max="8" step="0.1" value="3.0">
+        </div>
+
+        <h2>สถานะตรวจวัดเงาตกกระทบ</h2>
+        <div class="param" style="margin-top: 10px;">
+            <span>การเกิด Shadow Flicker:</span>
+            <span id="flicker-status" class="status-badge flicker-inactive">ปกติ (SAFE)</span>
+        </div>
+    </div>
+
+    <div id="chart-panel">
+        <div class="chart-title">กราฟแสดงสัญญาณแสงวูบวาบแบบเรียลไทม์ (Real-time Shadow Flicker Signal - Lux Intensity)</div>
+        <div class="canvas-container">
+            <canvas id="flickerChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. SET UP THREE.JS ENVIRONMENT ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x05050a);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(6, 4, 8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 0, 0);
+
+        // แสงธรรมชาติรอบข้าง
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+        scene.add(ambientLight);
+
+        // ดวงอาทิตย์จำลอง (Directional Light ที่ขยับตามมุมเงย/ทิศ)
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 25;
+        const dSide = 6;
+        sunLight.shadow.camera.left = -dSide;
+        sunLight.shadow.camera.right = dSide;
+        sunLight.shadow.camera.top = dSide;
+        sunLight.shadow.camera.bottom = -dSide;
+        scene.add(sunLight);
+
+        // เส้นแสดงทิศทางแสงแดด (Ray Visualizer)
+        const rayGeo = new THREE.BufferGeometry();
+        const rayMat = new THREE.LineBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.6 });
+        const rayLine = new THREE.Line(rayGeo, rayMat);
+        scene.add(rayLine);
+
+        // พื้นดินรองรับเงา (Ground plane)
+        const groundGeo = new THREE.PlaneGeometry(30, 30);
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -2; // จุดศูนย์กลางกังหันอยู่ที่ (0,0,0) ความสูงเสา 2 เมตร
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        const gridHelper = new THREE.GridHelper(30, 30, 0x475569, 0x334155);
+        gridHelper.position.y = -1.99;
+        scene.add(gridHelper);
+
+        // --- 2. BUILD WIND TURBINE (จากรูปพารามิเตอร์) ---
+        const R_tur = 1.318371;
+        const turbineGroup = new THREE.Group();
+        scene.add(turbineGroup);
+
+        // เสากังหัน
+        const towerGeo = new THREE.CylinderGeometry(0.04, 0.08, 2.0, 16);
+        const towerMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.4 });
+        const tower = new THREE.Mesh(towerGeo, towerMat);
+        tower.position.y = -1;
+        turbineGroup.add(tower);
+
+        // ห้องเครื่อง
+        const nacelleGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.25, 16);
+        nacelleGeo.rotateX(Math.PI / 2);
+        const nacelle = new THREE.Mesh(nacelleGeo, towerMat);
+        turbineGroup.add(nacelle);
+
+        // แกนหมุนโรเตอร์
+        const rotorHubGroup = new THREE.Group();
+        turbineGroup.add(rotorHubGroup);
+
+        const hubGeo = new THREE.SphereGeometry(0.08, 16, 16);
+        const hubMat = new THREE.MeshStandardMaterial({ color: 0xcbcfd6, roughness: 0.3 });
+        const hub = new THREE.Mesh(hubGeo, hubMat);
+        hub.position.z = 0.08;
+        rotorHubGroup.add(hub);
+
+        // สร้างใบพัดจำลอง 3 แฉก
+        const bladeGroup = new THREE.Group();
+        bladeGroup.position.z = 0.1;
+        rotorHubGroup.add(bladeGroup);
+
+        // ฟังก์ชันสร้างรูปทรงใบปีกย่อส่วน
+        function makeBladeGeometry() {
+            const geom = new THREE.BoxGeometry(0.12, R_tur, 0.015);
+            geom.translate(0, R_tur/2, 0); // ให้หมุนรอบโคนใบ
+            return geom;
+        }
+        const bladeGeo = makeBladeGeometry();
+        const bladeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+
+        const blades = [];
+        for(let i=0; i<3; i++) {
+            const b = new THREE.Mesh(bladeGeo, bladeMat);
+            b.rotation.z = i * (Math.PI * 2 / 3);
+            b.castShadow = true;
+            bladeGroup.add(b);
+            blades.push(b);
+        }
+
+        // --- 3. RECEIVER VISUALIZER (จุดผู้สังเกตการณ์บนพื้น) ---
+        const receiverGeo = new THREE.SphereGeometry(0.08, 16, 16);
+        const receiverMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+        const receiverMesh = new THREE.Mesh(receiverGeo, receiverMat);
+        scene.add(receiverMesh);
+
+        // --- 4. MATHEMATICAL MODELING (อ้างอิงสมการที่ 2 ถึง 7 ใน PDF) ---
+        // ควบคุมค่า Slider UI
+        const slideAzimuth = document.getElementById('slide-azimuth');
+        const slideElevation = document.getElementById('slide-elevation');
+        const slideYaw = document.getElementById('slide-yaw');
+        const slideRecX = document.getElementById('slide-recX');
+        const slideRecZ = document.getElementById('slide-recZ');
+
+        const valAzimuth = document.getElementById('val-azimuth');
+        const valElevation = document.getElementById('val-elevation');
+        const valYaw = document.getElementById('val-yaw');
+        const valRecX = document.getElementById('val-recX');
+        const valRecZ = document.getElementById('val-recZ');
+        const flickerStatus = document.getElementById('flicker-status');
+
+        // ข้อมูลกราฟเรียลไทม์
+        const canvas = document.getElementById('flickerChart');
+        const ctx = canvas.getContext('2d');
+        let historyData = new Array(200).fill(1.0); // 1.0 คือสว่างเต็มที่, 0.0 คือโดนเงาบัง
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function updateSimulationParameters() {
+            // ดึงค่าจากหน้าต่าง UI
+            const psi = parseFloat(slideAzimuth.value) * Math.PI / 180;     // Azimuth
+            const theta = parseFloat(slideElevation.value) * Math.PI / 180; // Elevation
+            const yaw = parseFloat(slideYaw.value) * Math.PI / 180;         // Turbine Yaw
+
+            const recX = parseFloat(slideRecX.value);
+            const recZ = parseFloat(slideRecZ.value);
+            const recY = -2.0; // ระดับพื้นดิน
+
+            // อัปเดตข้อความ UI
+            valAzimuth.innerText = slideAzimuth.value + "°";
+            valElevation.innerText = slideElevation.value + "°";
+            valYaw.innerText = slideYaw.value + "°";
+            valRecX.innerText = slideRecX.value + " m";
+            valRecZ.innerText = slideRecZ.value + " m";
+
+            // 1. หมุนตัวกังหันตามมุม Yaw
+            turbineGroup.rotation.y = yaw;
+
+            // 2. ตั้งตำแหน่งดวงอาทิตย์ (แปลงเวกเตอร์พิกัดทรงกลมเป็นคาร์ทีเซียนตามสมการที่ 2 ในเปเปอร์)
+            // หมายเหตุ: ปรับทิศทางให้สอดคล้องกับแกนพิกัดของ Three.js (แกน Y ชี้ขึ้น, แสงวิ่งสวนทิศทางไปหาตัวรับ)
+            const sunDistance = 12;
+            const sX = sunDistance * Math.cos(theta) * Math.sin(psi);
+            const sZ = sunDistance * Math.cos(theta) * Math.cos(psi);
+            const sY = sunDistance * Math.sin(theta) - 2; // เทียบจากระดับพื้น
+
+            sunLight.position.set(sX, sY, sZ);
+
+            // 3. ปรับตำแหน่งตัวรับบนพื้น (Receiver Vector)
+            receiverMesh.position.set(recX, recY, recZ);
+
+            // 4. ลากเส้นสมมติ Ray-tracing จากดวงอาทิตย์ผ่านพิกัดศูนย์กลางโรเตอร์ลงสู่พื้นโลก
+            const points = [
+                new THREE.Vector3(sX, sY, sZ),
+                new THREE.Vector3(recX, recY, recZ)
+            ];
+            rayGeo.setFromPoints(points);
+        }
+
+        // สมการหลักในการตรวจสอบจุดตัดเวกเตอร์เงา (Analytical Ray-Plane Intersection)
+        // อ้างอิงตามสมการ (2), (5), (6) และ (7) ของบทความวิจัยที่แนบมา
+        function checkShadowIntersection() {
+            const psi = parseFloat(slideAzimuth.value) * Math.PI / 180;
+            const theta = parseFloat(slideElevation.value) * Math.PI / 180;
+            const yaw = parseFloat(slideYaw.value) * Math.PI / 180;
+
+            const recX = parseFloat(slideRecX.value);
+            const recZ = parseFloat(slideRecZ.value);
+            const recY = 0.0; // คิดระดับความสูงศูนย์กลางฮับที่ความสูงสัมพัทธ์ y = 0
+
+            // เวกเตอร์แสงดวงอาทิตย์ n_sun (สมการ 2)
+            const n_sun = new THREE.Vector3(
+                Math.cos(theta) * Math.sin(psi),
+                Math.sin(theta),
+                Math.cos(theta) * Math.cos(psi)
+            ).normalize();
+
+            // เวกเตอร์แนวตั้งฉากของแผ่นระนาบโรเตอร์ n_tur (สมการ 2)
+            const n_tur = new THREE.Vector3(
+                Math.sin(yaw),
+                0,
+                Math.cos(yaw)
+            ).normalize();
+
+            // พิกัดตัวรับสัญญาณสัมพัทธ์กับศูนย์กลางฮับกังหันลม (prec)
+            const p_rec = new THREE.Vector3(recX, -2.0, recZ); // พื้นอยู่ต่ำกว่าฮับ 2 เมตร
+
+            // คำนวณระยะทาง d จากจุดตัวรับไปยังระนาบโรเตอร์ตามทิศทางแสง (สมการ 5)
+            const numerator = -p_rec.dot(n_tur);
+            const denominator = n_sun.dot(n_tur);
+
+            if (Math.abs(denominator) < 0.001) return false; // ขนานกัน แสงไม่ตัดระนาบ
+
+            const d = numerator / denominator;
+            if (d < 0) return false; // ดวงอาทิตย์อยู่ต่ำกว่าระดับพื้นดินหรือส่องไปคนละด้าน
+
+            // พิกัดจุดตัด p* บนระนาบแผ่นโรเตอร์ (สมการ 6)
+            const p_star = new THREE.Vector3().copy(p_rec).add(n_sun.clone().multiplyScalar(d));
+
+            // ตรวจสอบว่าระยะห่างจากศูนย์กลางฮับ ||p*|| น้อยกว่ารัศมีใบพัดตัวจริงหรือไม่ (สมการ 7)
+            const distanceToHub = p_star.length();
+            if (distanceToHub > R_tur) {
+                return false; // เงาหลักของวงกลมโรเตอร์ตกไม่ถึงตัวรับ
+            }
+
+            // --- ตรวจสอบลึกซึ้งระดับองศาใบพัดหมุนบัง (Blade Intersection) ---
+            // หาความต่างมุมในระนาบสัมพัทธ์ 2 มิติของโรเตอร์
+            // หาเวกเตอร์ฐานบนระนาบโรเตอร์
+            const upVector = new THREE.Vector3(0, 1, 0);
+            const rightVector = new THREE.Vector3().crossVectors(n_tur, upVector).normalize();
+            
+            const localX = p_star.dot(rightVector);
+            const localY = p_star.dot(upVector);
+            const angleOnRotor = Math.atan2(localY, localX);
+
+            // ตรวจสอบว่าพิกัดตัดกับ 1 ใน 3 ใบพัดที่กำลังหมุนอยู่หรือไม่
+            const currentRotorAngle = bladeGroup.rotation.z;
+            const bladeWidthAngle = 0.12 / distanceToHub; // มุมความกว้างของเงาใบพัดแปรผกผันตามระยะทางรัศมี
+
+            for (let i = 0; i < 3; i++) {
+                let diff = Math.abs(angleOnRotor - (currentRotorAngle + i * Math.PI * 2 / 3));
+                // จัดการความครบรอบวงกลม 360 องศา
+                diff = diff % (Math.PI * 2);
+                if (diff > Math.PI) diff = Math.PI * 2 - diff;
+
+                if (diff < bladeWidthAngle) {
+                    return true; // เกิดการบดบังแสงอาทิตย์โดยใบพัดจริง ณ วินาทีนี้!
+                }
+            }
+            return false;
+        }
+
+        // --- 5. ANIMATION & PLOTTING LOOP ---
+        const clock = new THREE.Clock();
+        const rpmSpeed = 69.23077;
+        const radPerSec = (rpmSpeed * 2 * Math.PI) / 60; // ความเร็วหมุนใบพัดสัมบูรณ์
+
+        function drawChart() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // วาดเส้นแบ่งระดับความสว่างปกติ (100% Light)
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height * 0.2);
+            ctx.lineTo(canvas.width, canvas.height * 0.2);
+            ctx.stroke();
+
+            // พล็อตเส้นกราฟสัญญาณความสว่าง (Lux Intensity Profile)
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            const step = canvas.width / (historyData.length - 1);
+            for (let i = 0; i < historyData.length; i++) {
+                // แปลงค่า 0.0 -> 1.0 เป็นพิกัดแกน Y บนจอภาพ (0 คือเงาตก มืดลงต่ำสุด)
+                const yPos = canvas.height * 0.2 + (1.0 - historyData[i]) * (canvas.height * 0.6);
+                if (i === 0) {
+                    ctx.moveTo(0, yPos);
+                } else {
+                    ctx.lineTo(i * step, yPos);
+                }
+            }
+            ctx.stroke();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = clock.getDelta();
+            
+            // หมุนใบพัดกังหันแบบต่อเนื่องตามความเร็วจากเอกสารวิจัย
+            bladeGroup.rotation.z += radPerSec * dt;
+
+            // รันตัวแปรและการจับตำแหน่งเรย์
+            updateSimulationParameters();
+
+            // ตรวจจับสัญญาณ Shadow Flicker
+            const isShadowed = checkShadowIntersection();
+            
+            // บันทึกสัญญาณลงในอาร์เรย์กราฟ (เลื่อนข้อมูลไปทางซ้าย)
+            historyData.shift();
+            historyData.push(isShadowed ? 0.1 : 1.0); // 0.1 หมายถึงความสว่างดรอปลงเมื่อเงาพาดผ่าน
+
+            if (isShadowed) {
+                flickerStatus.innerText = "เตือนภัย! (FLICKER ACTIVE)";
+                flickerStatus.className = "status-badge flicker-active";
+            } else {
+                flickerStatus.innerText = "ปกติ (SAFE)";
+                flickerStatus.className = "status-badge flicker-inactive";
+            }
+
+            // วาดกราฟและเรนเดอร์ฉากสามมิติ
+            drawChart();
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // มัดเหตุการณ์การเปลี่ยนแปลงปุ่มสไลเดอร์ให้คำนวณทันที
+        const inputs = [slideAzimuth, slideElevation, slideYaw, slideRecX, slideRecZ];
+        inputs.forEach(input => input.addEventListener('input', updateSimulationParameters));
+
+        // เริ่มต้นการทำงาน
+        animate();
+    </script>
+</body>
+</html>
