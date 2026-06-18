@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Light1 Data Animation Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        h2 { text-align: center; color: #2c3e50; }
+        .dashboard {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .stat-box { text-align: center; }
+        .stat-title { font-size: 0.9em; color: #7f8c8d; text-transform: uppercase; }
+        .stat-value { font-size: 1.5em; font-weight: bold; color: #3498db; margin-top: 5px; }
+        .chart-container { position: relative; height: 400px; width: 100%; }
+        .controls { text-align: center; margin-top: 20px; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #2ecc71;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        button:hover { background: #27ae60; }
+        button:disabled { background: #bdc3c7; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📡 ระบบแสดงผลข้อมูล Light1 (ภาพเคลื่อนไหว)</h2>
+    
+    <div class="dashboard">
+        <div class="stat-box">
+            <div class="stat-title">เวลา (Time)</div>
+            <div class="stat-value" id="currentTime">-</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-title">Light1</div>
+            <div class="stat-value" id="currentLight">-</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-title">Max / Min</div>
+            <div class="stat-value" id="currentMaxMin">- / -</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-title">Status</div>
+            <div class="stat-value" id="currentStatus">-</div>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="lightChart"></canvas>
+    </div>
+
+    <div class="controls">
+        <button id="startBtn" onclick="startAnimation()" disabled>▶ เริ่มแสดงภาพเคลื่อนไหว</button>
+        <button id="pauseBtn" onclick="pauseAnimation()">⏸ หยุดชั่วคราว</button>
+    </div>
+</div>
+
+<script>
+    const sheetUrl = "https://sheets.googleapis.com/v4/spreadsheets/1hbDswkXDPJlociigUw18IHJFv9I9Eu_mtYBa8gOTP6M/values/flicker?alt=json&key=AIzaSyDvVrGDfJ6UmI74oUlMkqlelm5lmb9qabY";
+    
+    let allData = [];
+    let currentIndex = 0;
+    let chart;
+    let animationTimer;
+
+    // ฟังก์ชันดึงข้อมูลจาก Google Sheets
+    async function fetchData() {
+        try {
+            const response = await fetch(sheetUrl);
+            const data = await response.json();
+            
+            if(data.values && data.values.length > 1) {
+                const headers = data.values[0];
+                
+                // ค้นหาตำแหน่ง Index ของแต่ละคอลัมน์แบบยืดหยุ่น
+                const timeIdx = headers.findIndex(h => h.toLowerCase().includes('time') || h.toLowerCase().includes('date'));
+                const lightIdx = headers.findIndex(h => h.toLowerCase().includes('light1') || h.toLowerCase().includes('light'));
+                const maxIdx = headers.findIndex(h => h.toLowerCase().includes('max'));
+                const minIdx = headers.findIndex(h => h.toLowerCase().includes('min'));
+                const statusIdx = headers.findIndex(h => h.toLowerCase().includes('status'));
+
+                // จัดเตรียมข้อมูลลง Array
+                allData = data.values.slice(1).map(row => ({
+                    time: timeIdx !== -1 ? row[timeIdx] : 'Unknown Time',
+                    light1: lightIdx !== -1 ? parseFloat(row[lightIdx]) : 0,
+                    max: maxIdx !== -1 ? parseFloat(row[maxIdx]) : null,
+                    min: minIdx !== -1 ? parseFloat(row[minIdx]) : null,
+                    status: statusIdx !== -1 ? row[statusIdx] : 'N/A'
+                }));
+                
+                // เริ่มต้นสร้างกราฟเปล่าๆ
+                initChart();
+                document.getElementById('startBtn').disabled = false;
+                startAnimation(); // เริ่มอนิเมชันอัตโนมัติเมื่อโหลดข้อมูลเสร็จ
+            } else {
+                alert("ไม่พบข้อมูลในระบบฐานข้อมูล");
+            }
+        } catch (error) {
+            console.error("Error fetching data:", error);
+            alert("เกิดข้อผิดพลาดในการดึงข้อมูล กรุณาตรวจสอบ URL หรือสิทธิ์การเข้าถึง");
+        }
+    }
+
+    // ฟังก์ชันสร้างโครงสร้างกราฟ
+    function initChart() {
+        const ctx = document.getElementById('lightChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [], // เวลา
+                datasets: [
+                    {
+                        label: 'Light1',
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                        data: [],
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true
+                    },
+                    {
+                        label: 'Max Limit',
+                        borderColor: '#e74c3c',
+                        borderDash: [5, 5],
+                        data: [],
+                        borderWidth: 1,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'Min Limit',
+                        borderColor: '#f1c40f',
+                        borderDash: [5, 5],
+                        data: [],
+                        borderWidth: 1,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 400 }, // ให้กราฟเลื่อนแบบสมูท
+                scales: {
+                    x: { title: { display: true, text: 'ช่วงเวลา (Time)' } },
+                    y: { title: { display: true, text: 'ค่าความสว่าง (Value)' }, suggestedMin: 0 }
+                }
+            }
+        });
+    }
+
+    // ฟังก์ชันรันภาพเคลื่อนไหว (เพิ่มข้อมูลลงกราฟทีละจุด)
+    function startAnimation() {
+        document.getElementById('startBtn').disabled = true;
+        
+        // จำลองการเพิ่มข้อมูลทุกๆ 1 วินาที (เสมือนช่วง 15 นาทีตามที่ร้องขอ)
+        animationTimer = setInterval(() => {
+            if (currentIndex >= allData.length) {
+                pauseAnimation(); // สิ้นสุดข้อมูล
+                document.getElementById('startBtn').innerText = "สิ้นสุดข้อมูล";
+                return;
+            }
+
+            const currentData = allData[currentIndex];
+
+            // อัปเดตกราฟ
+            chart.data.labels.push(currentData.time);
+            chart.data.datasets[0].data.push(currentData.light1);
+            
+            // ถ้ามีค่า Max / Min ให้พล็อตเส้นประด้วย
+            if(currentData.max !== null) chart.data.datasets[1].data.push(currentData.max);
+            if(currentData.min !== null) chart.data.datasets[2].data.push(currentData.min);
+
+            // แสดงจุดข้อมูลแค่ 20 จุดล่าสุดเพื่อให้กราฟเคลื่อนที่ไปข้างหน้าเหมือน Real-time
+            if (chart.data.labels.length > 20) {
+                chart.data.labels.shift();
+                chart.data.datasets.forEach(dataset => dataset.data.shift());
+            }
+
+            chart.update();
+
+            // อัปเดตข้อมูลบนแดชบอร์ด (Status, Max, Min)
+            document.getElementById('currentTime').innerText = currentData.time;
+            document.getElementById('currentLight').innerText = currentData.light1;
+            document.getElementById('currentMaxMin').innerText = `${currentData.max ?? '-'} / ${currentData.min ?? '-'}`;
+            
+            // เปลี่ยนสี Status ตามสภาวะ (ปรับได้ตามคำในฐานข้อมูลของคุณ)
+            const statusEl = document.getElementById('currentStatus');
+            statusEl.innerText = currentData.status;
+            if(currentData.status.toLowerCase().includes('ok') || currentData.status.toLowerCase().includes('normal')) {
+                statusEl.style.color = '#2ecc71';
+            } else {
+                statusEl.style.color = '#e74c3c';
+            }
+
+            currentIndex++;
+        }, 1000); // 1000 มิลลิวินาที (1 วินาที) ต่อการนำเข้าข้อมูล 1 แถว คุณสามารถปรับลด-เพิ่มความเร็วได้
+    }
+
+    function pauseAnimation() {
+        clearInterval(animationTimer);
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('startBtn').innerText = "▶ เล่นต่อ";
+    }
+
+    // ----------------------------------------------------
+    // [ออปชั่นเสริม]: หากต้องการ "ดึงข้อมูลใหม่ทุกๆ 15 นาที" จากฐานข้อมูลจริง
+    // สามารถเปิดใช้โค้ดด้านล่างนี้ได้เลย
+    // setInterval(fetchData, 15 * 60 * 1000); 
+    // ----------------------------------------------------
+
+    // โหลดข้อมูลครั้งแรกทันทีที่เปิดหน้าเว็บ
+    window.onload = fetchData;
+
+</script>
+</body>
+</html>
