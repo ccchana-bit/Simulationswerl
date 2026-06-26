@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Coastal Park Guardian</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+body { overflow:hidden; background:#1a3a5c; font-family:'Arial',sans-serif; touch-action:none; }
+#canvas-container { width:100vw; height:100vh; }
+
+#hud { position:fixed; top:0; left:0; right:0; pointer-events:none; }
+#score-box {
+  position:fixed; top:14px; left:14px;
+  background:rgba(0,20,50,0.82); border:1.5px solid #00d4ff;
+  border-radius:12px; padding:10px 18px; color:#fff;
+  font-size:15px; line-height:1.7;
+  box-shadow:0 0 18px #00d4ff55;
+}
+#score-box .val { color:#00d4ff; font-weight:bold; font-size:18px; }
+#wave-box {
+  position:fixed; top:14px; right:14px;
+  background:rgba(0,20,50,0.82); border:1.5px solid #ff4444;
+  border-radius:12px; padding:10px 18px; color:#fff;
+  font-size:15px; line-height:1.7;
+  box-shadow:0 0 18px #ff444455;
+}
+#wave-box .val { color:#ff8888; font-weight:bold; font-size:18px; }
+
+#timer-bar-wrap {
+  position:fixed; top:0; left:0; right:0; height:5px; background:rgba(0,0,0,0.3);
+}
+#timer-bar {
+  height:5px; background:linear-gradient(90deg,#00d4ff,#0077ff);
+  width:100%; transition:width 0.1s linear;
+  box-shadow:0 0 8px #00d4ff;
+}
+
+#controls {
+  position:fixed; bottom:0; left:0; right:0;
+  display:flex; justify-content:space-between; align-items:flex-end;
+  padding:0 18px 22px;
+  pointer-events:none;
+}
+.dpad {
+  display:grid;
+  grid-template-columns:56px 56px 56px;
+  grid-template-rows:56px 56px;
+  gap:8px;
+  pointer-events:all;
+}
+.dpad button { width:56px; height:56px; border-radius:50%; border:2px solid rgba(0,212,255,0.5);
+  background:rgba(0,30,60,0.75); color:#00d4ff; font-size:22px; font-weight:bold;
+  cursor:pointer; backdrop-filter:blur(4px);
+  box-shadow:0 0 10px rgba(0,212,255,0.3);
+  -webkit-tap-highlight-color:transparent;
+  transition:background 0.1s, box-shadow 0.1s;
+}
+.dpad button:active { background:rgba(0,212,255,0.3); box-shadow:0 0 20px rgba(0,212,255,0.8); }
+#btn-run-wrap { pointer-events:all; display:flex; flex-direction:column; align-items:center; gap:10px; }
+#btn-run { width:68px; height:68px; border-radius:50%;
+  border:2px solid rgba(255,200,0,0.6);
+  background:rgba(60,40,0,0.75); color:#ffc800; font-size:13px; font-weight:bold;
+  cursor:pointer; backdrop-filter:blur(4px);
+  box-shadow:0 0 14px rgba(255,200,0,0.4);
+  -webkit-tap-highlight-color:transparent;
+}
+#btn-run:active { background:rgba(255,200,0,0.3); box-shadow:0 0 24px rgba(255,200,0,0.9); }
+#btn-shoot-wrap { pointer-events:all; }
+#btn-shoot { width:80px; height:80px; border-radius:50%;
+  border:3px solid rgba(0,212,255,0.8);
+  background:radial-gradient(circle at 40% 35%, #003366, #001020);
+  color:#00d4ff; font-size:13px; font-weight:bold;
+  cursor:pointer; backdrop-filter:blur(4px);
+  box-shadow:0 0 22px rgba(0,212,255,0.6), inset 0 0 12px rgba(0,212,255,0.2);
+  -webkit-tap-highlight-color:transparent;
+}
+#btn-shoot:active { box-shadow:0 0 40px rgba(0,212,255,1), inset 0 0 20px rgba(0,212,255,0.5); }
+
+#message {
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:rgba(0,20,50,0.9); border:2px solid #00d4ff;
+  border-radius:16px; padding:24px 36px; color:#fff; text-align:center;
+  font-size:20px; display:none; pointer-events:none;
+  box-shadow:0 0 40px #00d4ff66;
+}
+#message .big { font-size:28px; color:#00d4ff; font-weight:bold; margin-bottom:8px; }
+
+/* GAME OVER OVERLAY */
+#gameover {
+  display:none;
+  position:fixed; inset:0;
+  background:rgba(0,0,0,0.0);
+  justify-content:center; align-items:center;
+  flex-direction:column;
+  z-index:999;
+  pointer-events:all;
+  transition:background 1s;
+}
+#gameover.show { display:flex; }
+#gameover.dark { background:rgba(0,0,0,0.85); }
+#go-card {
+  background:rgba(10,5,20,0.95); border:2px solid #ff3300;
+  border-radius:20px; padding:36px 48px; text-align:center; color:#fff;
+  box-shadow:0 0 60px #ff330088, 0 0 120px #ff110044;
+  transform:scale(0); transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+#go-card.pop { transform:scale(1); }
+#go-card .title { font-size:40px; font-weight:bold; color:#ff4400; text-shadow:0 0 20px #ff6600; margin-bottom:8px; }
+#go-card .sub   { font-size:18px; color:#ffaa88; margin-bottom:6px; }
+#go-card .pts   { font-size:32px; color:#ffdd00; font-weight:bold; margin:14px 0; text-shadow:0 0 10px #ffaa00; }
+#go-card .hint  { font-size:15px; color:#aaa; margin-top:10px; }
+#restart-btn {
+  margin-top:22px; padding:14px 40px;
+  background:linear-gradient(135deg,#ff3300,#cc1100);
+  border:none; border-radius:50px; color:#fff; font-size:18px; font-weight:bold;
+  cursor:pointer; box-shadow:0 0 20px #ff330066;
+  letter-spacing:1px;
+}
+#restart-btn:active { transform:scale(0.95); }
+
+/* Flash overlay for explosion */
+#flash {
+  display:none; position:fixed; inset:0;
+  background:white; pointer-events:none; z-index:998;
+}
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+
+<div id="hud">
+  <div id="timer-bar-wrap"><div id="timer-bar"></div></div>
+  <div id="score-box">⭐ คะแนน: <span class="val" id="score-val">0</span><br>🔫 ยิงแล้ว: <span class="val" id="kill-val">0</span> ตัว</div>
+  <div id="wave-box">🌊 คลื่นที่: <span class="val" id="wave-val">1</span><br>👹 ผู้ร้าย: <span class="val" id="villain-val">0</span> ตัว</div>
+</div>
+
+<div id="controls">
+  <div class="dpad">
+    <div></div>
+    <button id="btn-fwd" ontouchstart="setMove('fwd',true)" ontouchend="setMove('fwd',false)" onmousedown="setMove('fwd',true)" onmouseup="setMove('fwd',false)">▲</button>
+    <div></div>
+    <button id="btn-left" ontouchstart="setMove('left',true)" ontouchend="setMove('left',false)" onmousedown="setMove('left',true)" onmouseup="setMove('left',false)">◀</button>
+    <button id="btn-back" ontouchstart="setMove('back',true)" ontouchend="setMove('back',false)" onmousedown="setMove('back',true)" onmouseup="setMove('back',false)">▼</button>
+    <button id="btn-right" ontouchstart="setMove('right',true)" ontouchend="setMove('right',false)" onmousedown="setMove('right',true)" onmouseup="setMove('right',false)">▶</button>
+  </div>
+  <div id="btn-shoot-wrap">
+    <button id="btn-shoot" ontouchstart="shoot()" onmousedown="shoot()">⚡<br>เลเซอร์</button>
+  </div>
+  <div id="btn-run-wrap">
+    <button id="btn-run" ontouchstart="setMove('run',true)" ontouchend="setMove('run',false)" onmousedown="setMove('run',true)" onmouseup="setMove('run',false)">🏃<br>วิ่ง</button>
+  </div>
+</div>
+
+<div id="message"><div class="big" id="msg-title"></div><div id="msg-body"></div></div>
+
+<div id="flash"></div>
+
+<div id="gameover">
+  <div id="go-card">
+    <div class="title">💥 GAME OVER 💥</div>
+    <div class="sub">ตัวละครถูกผู้ร้ายสัมผัส… และระเบิดตัวเอง!</div>
+    <div class="pts">⭐ <span id="final-score">0</span> คะแนน</div>
+    <div class="sub">🌊 ผ่านมาแล้ว <span id="final-wave">1</span> คลื่น &nbsp;|&nbsp; 🔫 กำจัด <span id="final-kills">0</span> ตัว</div>
+    <div class="hint">ยืนหยัดปกป้องผู้สูงวัยได้อย่างกล้าหาญ!</div>
+    <button id="restart-btn" onclick="restartGame()">🔄 เล่นใหม่</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let score=0, kills=0, wave=1, villainBase=2;
+let move={fwd:false,back:false,left:false,right:false,run:false};
+let scene,camera,renderer,hero,heroGroup;
+let villains=[],lasers=[],elderNPCs=[],particles=[];
+let lampLights=[];
+let waveTimer=0, WAVE_INTERVAL=5;
+let gameOver=false;
+let legL,legR,armL,armR; // refs for animation
+let timerEl=document.getElementById('timer-bar');
+
+function setMove(k,v){ if(!gameOver) move[k]=v; }
+
+// ─── THREE SETUP ─────────────────────────────────────────────────────────────
+scene=new THREE.Scene();
+scene.background=new THREE.Color(0x1e3d5c); // +25% brighter sky
+scene.fog=new THREE.Fog(0x1e3d5c,40,100);
+
+camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,200);
+renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+// ─── LIGHTS (+25% brighter) ───────────────────────────────────────────────────
+// Ambient was 0.6 → 0.75
+scene.add(new THREE.AmbientLight(0x2244aa,0.75));
+
+// Moonlight/sun was 0.4 → 0.5, color brighter
+const moonLight=new THREE.DirectionalLight(0xaabbdd,0.5);
+moonLight.position.set(-10,20,10);
+moonLight.castShadow=true;
+moonLight.shadow.mapSize.set(1024,1024);
+moonLight.shadow.camera.near=0.1;
+moonLight.shadow.camera.far=100;
+moonLight.shadow.camera.left=-50;
+moonLight.shadow.camera.right=50;
+moonLight.shadow.camera.top=50;
+moonLight.shadow.camera.bottom=-50;
+scene.add(moonLight);
+
+// Hemisphere sky light (new – boosts overall brightness)
+const hemi=new THREE.HemisphereLight(0x6699cc,0x443322,0.5);
+scene.add(hemi);
+
+// ─── ENVIRONMENT ─────────────────────────────────────────────────────────────
+const groundMat=new THREE.MeshPhongMaterial({color:0xa08860,shininess:8});
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(120,120),groundMat);
+ground.rotation.x=-Math.PI/2; ground.receiveShadow=true;
+scene.add(ground);
+
+const seaGeo=new THREE.PlaneGeometry(80,40,30,15);
+const seaMat=new THREE.MeshPhongMaterial({color:0x1166cc,shininess:120,transparent:true,opacity:0.88});
+const sea=new THREE.Mesh(seaGeo,seaMat);
+sea.rotation.x=-Math.PI/2; sea.position.set(0,0.05,-65);
+scene.add(sea);
+
+const foam=new THREE.Mesh(new THREE.PlaneGeometry(80,3),new THREE.MeshPhongMaterial({color:0xbbeeff,transparent:true,opacity:0.7}));
+foam.rotation.x=-Math.PI/2; foam.position.set(0,0.06,-46);
+scene.add(foam);
+
+function makePalm(x,z){
+  const g=new THREE.Group();
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.18,3,7),new THREE.MeshPhongMaterial({color:0x7a5030}));
+  trunk.position.y=1.5; trunk.castShadow=true; g.add(trunk);
+  for(let i=0;i<5;i++){
+    const leaf=new THREE.Mesh(new THREE.ConeGeometry(1.2,0.3,5),new THREE.MeshPhongMaterial({color:0x2a7a3a}));
+    leaf.position.set(Math.sin(i*1.26)*1.1,3.2,Math.cos(i*1.26)*1.1);
+    leaf.rotation.z=Math.PI/4; leaf.castShadow=true; g.add(leaf);
+  }
+  const top=new THREE.Mesh(new THREE.SphereGeometry(0.9,6,4),new THREE.MeshPhongMaterial({color:0x2a9b2a}));
+  top.position.y=3.4; top.castShadow=true; g.add(top);
+  g.position.set(x,0,z); scene.add(g);
+}
+[[-18,5],[-22,-2],[-16,-10],[18,8],[20,-3],[16,-12],[-8,-40],[10,-38],[0,-35]].forEach(([x,z])=>makePalm(x,z));
+
+function makeBench(x,z,ry=0){
+  const g=new THREE.Group();
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.1,0.5),new THREE.MeshPhongMaterial({color:0x9B6E3C}));
+  seat.position.y=0.5;
+  const back=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.4,0.08),new THREE.MeshPhongMaterial({color:0x8a5e2d}));
+  back.position.set(0,0.75,0.21);
+  g.add(seat,back);
+  for(let sx of[-0.6,0.6]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.5,0.4),new THREE.MeshPhongMaterial({color:0x666}));
+    leg.position.set(sx,0.25,0); g.add(leg);
+  }
+  g.position.set(x,0,z); g.rotation.y=ry;
+  g.traverse(c=>{if(c.isMesh)c.castShadow=true;});
+  scene.add(g);
+}
+[[-8,5,0],[8,5,Math.PI],[0,10,Math.PI/2],[-12,-8,0],[12,-8,Math.PI]].forEach(([x,z,r])=>makeBench(x,z,r));
+
+function makeLamp(x,z){
+  const g=new THREE.Group();
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,5,8),new THREE.MeshPhongMaterial({color:0x445566}));
+  pole.position.y=2.5; pole.castShadow=true;
+  const cap=new THREE.Mesh(new THREE.SphereGeometry(0.25,8,6),new THREE.MeshPhongMaterial({color:0xffffcc,emissive:0xffee66,emissiveIntensity:1.3}));
+  cap.position.y=5.2; g.add(pole,cap); g.position.set(x,0,z); scene.add(g);
+  // +25% lamp intensity: was 1.2 → 1.5
+  const ptLight=new THREE.PointLight(0xffee88,1.5,16);
+  ptLight.position.set(x,5.2,z);
+  scene.add(ptLight); lampLights.push(ptLight);
+}
+[[-12,2],[12,2],[0,-6],[-12,-14],[12,-14],[0,-22],[-12,-30],[12,-30],[0,14],[-12,14],[12,14]].forEach(([x,z])=>makeLamp(x,z));
+
+function makeBush(x,z,dark=false){
+  const c=dark?0x0d220d:0x1e5a1e;
+  const b=new THREE.Mesh(new THREE.SphereGeometry(0.8+Math.random()*0.4,6,5),new THREE.MeshPhongMaterial({color:c}));
+  b.position.set(x,0.4,z); b.castShadow=true; scene.add(b);
+}
+[[-25,-25],[-25,-20],[25,-25],[25,-20],[-22,-15],[22,-15],[-20,-10],[20,-10]].forEach(([x,z])=>makeBush(x,z,true));
+[[-5,2],[6,3],[-10,-5],[11,-5],[-6,-15],[7,-18]].forEach(([x,z])=>makeBush(x,z,false));
+
+const pathMesh=new THREE.Mesh(new THREE.PlaneGeometry(4,80),new THREE.MeshPhongMaterial({color:0xd4c09a}));
+pathMesh.rotation.x=-Math.PI/2; pathMesh.position.set(0,0.01,0);
+scene.add(pathMesh);
+
+// ─── ELDERLY NPCs ─────────────────────────────────────────────────────────────
+function makeElder(x,z){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.6,0.25),new THREE.MeshPhongMaterial({color:0x999999}));
+  body.position.y=0.65; body.castShadow=true;
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.18,8,6),new THREE.MeshPhongMaterial({color:0xffe0b2}));
+  head.position.y=1.1; head.castShadow=true;
+  const hair=new THREE.Mesh(new THREE.SphereGeometry(0.19,8,4,[0,Math.PI*2,0,Math.PI*0.5]),new THREE.MeshPhongMaterial({color:0xffffff}));
+  hair.position.y=1.2;
+  const cane=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,1,4),new THREE.MeshPhongMaterial({color:0x7b5226}));
+  cane.position.set(0.28,0.5,0);
+  g.add(body,head,hair,cane);
+  g.position.set(x,0,z);
+  scene.add(g);
+  elderNPCs.push({group:g,baseX:x,baseZ:z});
+}
+[[-4,3],[4,3],[-4,-8],[4,-8],[0,-18],[-4,-28],[4,-28]].forEach(([x,z])=>makeElder(x,z));
+
+// ─── HEROINE ─────────────────────────────────────────────────────────────────
+heroGroup=new THREE.Group();
+const skinMat=new THREE.MeshPhongMaterial({color:0xffe0b2});
+const shirtMat=new THREE.MeshPhongMaterial({color:0x1a56db});
+const skirtMat=new THREE.MeshPhongMaterial({color:0xf5f5dc});
+const hairMat=new THREE.MeshPhongMaterial({color:0x1a0f00});
+
+const torso=new THREE.Mesh(new THREE.BoxGeometry(0.46,0.6,0.24),shirtMat);
+torso.position.y=0.88; torso.castShadow=true;
+const skirt=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.36,0.44,8),skirtMat);
+skirt.position.y=0.36; skirt.castShadow=true;
+const headM=new THREE.Mesh(new THREE.SphereGeometry(0.2,10,8),skinMat);
+headM.position.y=1.32; headM.castShadow=true;
+const bangs=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.1,0.22),hairMat);
+bangs.position.set(0,1.44,0.06);
+const hairBack=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.3,0.08),hairMat);
+hairBack.position.set(0,1.22,-0.18);
+const hairSideL=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.28,0.22),hairMat);
+hairSideL.position.set(-0.21,1.22,0.02);
+const hairSideR=hairSideL.clone(); hairSideR.position.x=0.21;
+armL=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.44,0.12),shirtMat);
+armL.position.set(-0.3,0.86,0); armL.castShadow=true;
+armR=armL.clone(); armR.position.x=0.3;
+legL=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.36,0.14),skinMat);
+legL.position.set(-0.1,0.18,0); legL.castShadow=true;
+legR=legL.clone(); legR.position.x=0.1;
+
+heroGroup.add(torso,skirt,headM,bangs,hairBack,hairSideL,hairSideR,armL,armR,legL,legR);
+heroGroup.position.set(0,0,0);
+scene.add(heroGroup);
+hero=heroGroup;
+
+// ─── VILLAIN FACTORY ─────────────────────────────────────────────────────────
+const darkCornerSpawns=[[-24,4],[-24,-18],[24,4],[24,-18],[-20,-28],[20,-28],[-10,-38],[10,-38],[-24,-8],[24,-8]];
+
+function spawnVillains(count){
+  for(let i=0;i<count;i++){
+    const g=new THREE.Group();
+    const bodyV=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.55,0.22),new THREE.MeshPhongMaterial({color:0x1a0022,emissive:0x330033,emissiveIntensity:0.3}));
+    bodyV.position.y=0.7; bodyV.castShadow=true;
+    const headV=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.28,0.28),new THREE.MeshPhongMaterial({color:0x0d0012,emissive:0x440022,emissiveIntensity:0.5}));
+    headV.position.y=1.2; headV.castShadow=true;
+    const eyeGeo=new THREE.SphereGeometry(0.04,4,3);
+    const eyeMat=new THREE.MeshPhongMaterial({color:0xff0000,emissive:0xff0000,emissiveIntensity:2});
+    const eyeL=new THREE.Mesh(eyeGeo,eyeMat); eyeL.position.set(-0.07,1.22,0.14);
+    const eyeR=eyeL.clone(); eyeR.position.x=0.07;
+    const legs=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.35,0.18),new THREE.MeshPhongMaterial({color:0x0a000f}));
+    legs.position.y=0.18;
+    g.add(bodyV,headV,eyeL,eyeR,legs);
+    const sp=darkCornerSpawns[Math.floor(Math.random()*darkCornerSpawns.length)];
+    g.position.set(sp[0]+(Math.random()-0.5)*4,0,sp[1]+(Math.random()-0.5)*4);
+    g.userData={speed:0.018+Math.random()*0.012};
+    scene.add(g);
+    villains.push(g);
+  }
+  document.getElementById('villain-val').textContent=villains.length;
+}
+
+// ─── LASER ────────────────────────────────────────────────────────────────────
+function shoot(){
+  if(gameOver) return;
+  const dir=new THREE.Vector3(0,0,-1).applyQuaternion(hero.quaternion);
+  const origin=hero.position.clone().add(new THREE.Vector3(0,1,0));
+  const beamGeo=new THREE.CylinderGeometry(0.03,0.03,14,5);
+  const beam=new THREE.Mesh(beamGeo,new THREE.MeshBasicMaterial({color:0x00d4ff,transparent:true,opacity:0.92}));
+  beam.position.copy(origin).addScaledVector(dir,7);
+  beam.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);
+  beam.userData.life=0.18;
+  scene.add(beam); lasers.push(beam);
+
+  const toRemove=[];
+  villains.forEach(v=>{
+    const dist=v.position.distanceTo(origin);
+    if(dist<14){
+      const toV=v.position.clone().sub(origin).normalize();
+      if(toV.dot(dir.clone().normalize())>0.7) toRemove.push(v);
+    }
+  });
+  toRemove.forEach(v=>hitVillain(v));
+}
+
+function hitVillain(v){
+  v.traverse(c=>{if(c.isMesh&&c.material){c.material=c.material.clone();c.material.emissive=new THREE.Color(0x00ffff);c.material.emissiveIntensity=3;}});
+  spawnParticles(v.position.clone(),0x00ffff,12);
+  setTimeout(()=>{
+    scene.remove(v);
+    villains=villains.filter(x=>x!==v);
+    score+=5; kills++;
+    document.getElementById('score-val').textContent=score;
+    document.getElementById('kill-val').textContent=kills;
+    document.getElementById('villain-val').textContent=villains.length;
+  },120);
+}
+
+// ─── PARTICLES ───────────────────────────────────────────────────────────────
+function spawnParticles(pos, color, count){
+  for(let i=0;i<count;i++){
+    const p=new THREE.Mesh(
+      new THREE.SphereGeometry(0.06+Math.random()*0.08,4,3),
+      new THREE.MeshBasicMaterial({color,transparent:true,opacity:1})
+    );
+    p.position.copy(pos).add(new THREE.Vector3((Math.random()-0.5)*0.5,Math.random()*0.5,(Math.random()-0.5)*0.5));
+    const vel=new THREE.Vector3((Math.random()-0.5)*0.18,(Math.random()*0.2+0.08),(Math.random()-0.5)*0.18);
+    p.userData={vel,life:0.7+Math.random()*0.5,maxLife:1.2};
+    scene.add(p); particles.push(p);
+  }
+}
+
+// ─── HERO EXPLOSION + GAME OVER ──────────────────────────────────────────────
+function triggerGameOver(){
+  if(gameOver) return;
+  gameOver=true;
+  // stop all movement
+  move={fwd:false,back:false,left:false,right:false,run:false};
+
+  // 1) Flash white
+  const flashEl=document.getElementById('flash');
+  flashEl.style.display='block';
+  flashEl.style.opacity='1';
+  flashEl.style.transition='opacity 0.6s';
+
+  // 2) Spawn big explosion particles at hero position
+  const heroPos=hero.position.clone().add(new THREE.Vector3(0,0.8,0));
+  spawnParticles(heroPos,0xff6600,40);
+  spawnParticles(heroPos,0xffcc00,30);
+  spawnParticles(heroPos,0xff2200,20);
+  spawnParticles(heroPos.clone().add(new THREE.Vector3(0,0.5,0)),0xffffff,15);
+
+  // 3) Big point light flash
+  const boom=new THREE.PointLight(0xff6600,8,20);
+  boom.position.copy(heroPos);
+  scene.add(boom);
+
+  // 4) Hide hero
+  hero.visible=false;
+
+  // 5) Shockwave ring
+  const ringGeo=new THREE.TorusGeometry(0.1,0.08,6,18);
+  const ringMat=new THREE.MeshBasicMaterial({color:0xff8800,transparent:true,opacity:0.9});
+  const ring=new THREE.Mesh(ringGeo,ringMat);
+  ring.position.copy(heroPos); ring.rotation.x=Math.PI/2;
+  ring.userData={life:1.0,isRing:true};
+  scene.add(ring); particles.push(ring);
+
+  // Fade out flash, fade in boom light
+  setTimeout(()=>{
+    flashEl.style.opacity='0';
+    setTimeout(()=>flashEl.style.display='none',600);
+    boom.intensity=0;
+    scene.remove(boom);
+  },200);
+
+  // Show game over UI after short delay
+  setTimeout(()=>{
+    document.getElementById('final-score').textContent=score;
+    document.getElementById('final-wave').textContent=wave;
+    document.getElementById('final-kills').textContent=kills;
+    const goEl=document.getElementById('gameover');
+    goEl.classList.add('show');
+    setTimeout(()=>goEl.classList.add('dark'),50);
+    setTimeout(()=>document.getElementById('go-card').classList.add('pop'),200);
+  },900);
+}
+
+// ─── WAVE SYSTEM ─────────────────────────────────────────────────────────────
+const msgEl=document.getElementById('message');
+function showMsg(title,body,dur=2000){
+  document.getElementById('msg-title').textContent=title;
+  document.getElementById('msg-body').textContent=body;
+  msgEl.style.display='block';
+  setTimeout(()=>msgEl.style.display='none',dur);
+}
+
+spawnVillains(villainBase);
+showMsg('🌊 ภารกิจเริ่ม!','ปกป้องผู้สูงวัย อย่าให้ผู้ร้ายแตะตัว!',2800);
+
+// ─── ANIMATION ───────────────────────────────────────────────────────────────
+let lastTime=performance.now();
+let legPhase=0;
+
+function animate(){
+  requestAnimationFrame(animate);
+  const now=performance.now();
+  const dt=Math.min((now-lastTime)/1000,0.05);
+  lastTime=now;
+
+  if(!gameOver){
+    // Wave timer
+    waveTimer+=dt;
+    timerEl.style.width=(Math.max(0,1-(waveTimer/WAVE_INTERVAL))*100)+'%';
+    if(waveTimer>=WAVE_INTERVAL){
+      waveTimer=0; wave++;
+      villainBase=Math.min(Math.pow(villainBase+1,2),80);
+      spawnVillains(villainBase);
+      document.getElementById('wave-val').textContent=wave;
+      showMsg('⚠️ คลื่นที่ '+wave,'ผู้ร้ายเพิ่มขึ้น '+villainBase+' ตัว!',2000);
+      WAVE_INTERVAL=Math.max(3,WAVE_INTERVAL-0.2);
+    }
+
+    // Hero movement
+    const speed=move.run?0.14:0.07;
+    if(move.fwd)  hero.translateZ(-speed);
+    if(move.back) hero.translateZ(speed);
+    if(move.left) hero.rotation.y+=0.055;
+    if(move.right) hero.rotation.y-=0.055;
+    hero.position.x=Math.max(-28,Math.min(28,hero.position.x));
+    hero.position.z=Math.max(-42,Math.min(22,hero.position.z));
+    hero.position.y=0;
+
+    // Leg animation
+    if(move.fwd||move.back||move.run){
+      legPhase+=dt*(move.run?10:6);
+      legL.position.y=0.18+Math.sin(legPhase)*0.08;
+      legR.position.y=0.18-Math.sin(legPhase)*0.08;
+      armL.rotation.x=Math.sin(legPhase)*0.4;
+      armR.rotation.x=-Math.sin(legPhase)*0.4;
+    }
+
+    // Camera
+    const behind=new THREE.Vector3(Math.sin(hero.rotation.y)*5.5,3.2,Math.cos(hero.rotation.y)*5.5);
+    camera.position.lerp(hero.position.clone().add(behind),0.12);
+    camera.lookAt(hero.position.clone().add(new THREE.Vector3(0,0.8,0)));
+
+    // Villain AI
+    villains.forEach(v=>{
+      // target hero (chase player too, not just elders)
+      const toHero=hero.position.clone().sub(v.position).setY(0);
+      const heroDist=toHero.length();
+
+      let target=null;
+      let targetDist=Infinity;
+      // nearest elder
+      elderNPCs.forEach(e=>{
+        const d=v.position.distanceTo(e.group.position);
+        if(d<targetDist){targetDist=d;target=e.group.position;}
+      });
+      // if hero is closer than nearest elder, chase hero
+      if(heroDist<targetDist){ target=hero.position; targetDist=heroDist; }
+
+      if(target){
+        const dir=target.clone().sub(v.position).setY(0).normalize();
+        let inLight=false;
+        lampLights.forEach(lp=>{ if(v.position.distanceTo(lp.position)<7) inLight=true; });
+        const s=inLight?v.userData.speed*0.35:v.userData.speed;
+        v.position.addScaledVector(dir,s);
+        v.position.y=0;
+        v.lookAt(target.clone().setY(v.position.y));
+      }
+
+      // eye pulse
+      v.traverse(c=>{ if(c.material&&c.material.emissive&&c.material.emissive.r>0.5)
+        c.material.emissiveIntensity=1.5+Math.sin(now*0.005)*0.8; });
+
+      // ── COLLISION WITH HERO ──
+      if(v.position.distanceTo(hero.position)<0.9) triggerGameOver();
+    });
+
+    // Elder wander
+    elderNPCs.forEach(e=>{
+      e.group.position.x=e.baseX+Math.sin(now*0.0003+e.baseX)*0.5;
+      e.group.position.z=e.baseZ+Math.cos(now*0.0004+e.baseZ)*0.5;
+    });
+  }
+
+  // Sea wave (always animate)
+  const sv=sea.geometry.attributes.position;
+  for(let i=0;i<sv.count;i++)
+    sv.setZ(i,Math.sin(sv.getX(i)*0.4+now*0.001)*0.18+Math.cos(sv.getY(i)*0.3+now*0.0008)*0.12);
+  sv.needsUpdate=true;
+
+  // Lamp flicker
+  lampLights.forEach((l,i)=>{ l.intensity=1.5+Math.sin(now*0.003+i)*0.15; });
+
+  // Lasers
+  for(let i=lasers.length-1;i>=0;i--){
+    const l=lasers[i];
+    l.userData.life-=dt;
+    if(l.material) l.material.opacity=Math.max(0,l.userData.life/0.18*0.9);
+    if(l.userData.life<=0){ scene.remove(l); lasers.splice(i,1); }
+  }
+
+  // Particles (explosion + hit)
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.userData.life-=dt;
+    if(p.userData.life<=0){ scene.remove(p); particles.splice(i,1); continue; }
+    if(p.userData.isRing){
+      // expand shockwave ring
+      const sc=1+(1-(p.userData.life))*18;
+      p.scale.set(sc,sc,sc);
+      if(p.material) p.material.opacity=p.userData.life*0.8;
+    } else {
+      if(p.userData.vel){
+        p.userData.vel.y-=dt*0.3; // gravity
+        p.position.addScaledVector(p.userData.vel,1);
+        if(p.material) p.material.opacity=p.userData.life/(p.userData.maxLife||1.2);
+      }
+    }
+  }
+
+  renderer.render(scene,camera);
+}
+animate();
+
+// ─── RESTART ─────────────────────────────────────────────────────────────────
+function restartGame(){
+  // Remove all villains and particles
+  villains.forEach(v=>scene.remove(v)); villains=[];
+  particles.forEach(p=>scene.remove(p)); particles=[];
+  lasers.forEach(l=>scene.remove(l)); lasers=[];
+
+  // Reset state
+  score=0; kills=0; wave=1; villainBase=2; waveTimer=0; WAVE_INTERVAL=5; gameOver=false;
+  document.getElementById('score-val').textContent=0;
+  document.getElementById('kill-val').textContent=0;
+  document.getElementById('wave-val').textContent=1;
+  document.getElementById('villain-val').textContent=0;
+
+  // Reset hero
+  hero.position.set(0,0,0); hero.rotation.y=0; hero.visible=true;
+
+  // Hide game over
+  const goEl=document.getElementById('gameover');
+  goEl.classList.remove('show','dark');
+  document.getElementById('go-card').classList.remove('pop');
+
+  spawnVillains(villainBase);
+  showMsg('🌊 ภารกิจเริ่มใหม่!','สู้ต่อไป! ปกป้องผู้สูงวัย!',2500);
+}
+
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowUp'||e.key==='w') setMove('fwd',true);
+  if(e.key==='ArrowDown'||e.key==='s') setMove('back',true);
+  if(e.key==='ArrowLeft'||e.key==='a') setMove('left',true);
+  if(e.key==='ArrowRight'||e.key==='d') setMove('right',true);
+  if(e.key===' '){ e.preventDefault(); shoot(); }
+  if(e.key==='Shift') setMove('run',true);
+});
+document.addEventListener('keyup',e=>{
+  if(e.key==='ArrowUp'||e.key==='w') setMove('fwd',false);
+  if(e.key==='ArrowDown'||e.key==='s') setMove('back',false);
+  if(e.key==='ArrowLeft'||e.key==='a') setMove('left',false);
+  if(e.key==='ArrowRight'||e.key==='d') setMove('right',false);
+  if(e.key==='Shift') setMove('run',false);
+});
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
